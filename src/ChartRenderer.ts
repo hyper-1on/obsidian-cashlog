@@ -2,7 +2,7 @@
 import { MarkdownRenderChild, TFile } from "obsidian";
 import { t, tp } from "./i18n";
 import { round2 } from "./MoneyUtils";
-import { Query, TableColConfig, parseTableConfig, createDefaultTableConfig } from "./Query/Query";
+import { Query, TableColConfig, parseTableConfig, createDefaultTableConfig, withGlobalQuery, formatWeekKey } from "./Query/Query";
 import type { ChartConfig, GroupByField, SplitBy, PieValueType } from "./Query/Query";
 import { QueryResult, EntryGroup } from "./Query/Filter";
 import { CashlogEntry } from "./EntryLocation";
@@ -15,15 +15,19 @@ import type { Context as DatalabelsContext } from "chartjs-plugin-datalabels/typ
 
 Chart.register(...registerables, ChartDataLabels);
 
-// 字段标签映射
-const FIELD_LABELS: Record<TableColConfig["field"], string> = {
-  date: t("chart.field.date"),
-  amount: t("chart.field.amount"),
-  description: t("chart.field.description"),
-  link: t("chart.field.link"),
-  account: t("chart.field.account"),
-  attachment: t("chart.field.attachment"),
-};
+// 字段标签。惰性求值：本模块在 i18n 初始化之前就被加载，
+// 顶层调用 t() 会把中文文案固化成模块常量，导致英文界面仍显示中文。
+function fieldLabel(field: TableColConfig["field"]): string {
+  return t(`chart.field.${field}`);
+}
+
+// 条目的业务类型标签
+function entryTypeLabel(entry: CashlogEntry): string {
+  if (entry.isTransfer) return t("cashlogModal.type.transfer");
+  if (entry.isBalanceChange) return t("cashlogModal.type.balanceChange");
+  if (entry.isIncome) return t("cashlogModal.type.income");
+  return t("cashlogModal.type.expense");
+}
 
 // 渲染 cashlog-chart 代码块为动态 HTML 表格
 export function renderChartTable(
@@ -58,7 +62,7 @@ export function renderChartTable(
     const cols = config.cols.slice(0, config.colCount);
     for (const col of cols) {
       const th = headerRow.createEl("th");
-      th.textContent = col.header || FIELD_LABELS[col.field];
+      th.textContent = col.header || fieldLabel(col.field);
       th.style.textAlign = col.align;
     }
 
@@ -176,6 +180,12 @@ function renderEntryRow(
         } else {
           td.setText("-");
         }
+        break;
+      }
+      case "type": {
+        const td = tr.createEl("td");
+        td.style.textAlign = col.align;
+        td.setText(entryTypeLabel(entry));
         break;
       }
       case "link": {
@@ -652,7 +662,7 @@ function computeBarValue(entries: CashlogEntry[], splitBy: SplitBy, item: string
         .reduce((s, e) => s + pickEntryAmount(e, splitBy, xGroupBy, item, groupKey), 0);
     }
     case "week": {
-      return entries.filter((e) => e.date && e.date.format("GGGG-WW") + "周" === item)
+      return entries.filter((e) => e.date && formatWeekKey(e.date) === item)
         .reduce((s, e) => s + pickEntryAmount(e, splitBy, xGroupBy, item, groupKey), 0);
     }
     case "month": {
@@ -694,7 +704,7 @@ function collectDistinctWeeks(xGroups: { key: string; entries: CashlogEntry[] }[
   const weekSet = new Set<string>();
   for (const xg of xGroups) {
     for (const e of xg.entries) {
-      if (e.date) weekSet.add(e.date.format("GGGG-WW") + "周");
+      if (e.date) weekSet.add(formatWeekKey(e.date));
     }
   }
   return Array.from(weekSet).sort();
@@ -883,6 +893,29 @@ function renderLineChart(
   });
 }
 
+// 把一组数值换算成整数百分比，并用「最大余数法」保证总和恰为 100%。
+// 逐项各自四舍五入会让各切片之和漂移到 99% / 102% 之类，看起来像数据算错了。
+export function computeIntegerPercentages(values: number[]): number[] {
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (total <= 0) return values.map(() => 0);
+
+  const exact = values.map((v) => (v / total) * 100);
+  const result = exact.map((v) => Math.floor(v));
+  let remainder = 100 - result.reduce((sum, v) => sum + v, 0);
+
+  // 余下的百分点按小数部分从大到小依次分配
+  const order = exact
+    .map((v, index) => ({ index, fraction: v - Math.floor(v) }))
+    .sort((a, b) => b.fraction - a.fraction);
+
+  for (let i = 0; i < order.length && remainder > 0; i++) {
+    result[order[i].index] += 1;
+    remainder -= 1;
+  }
+
+  return result;
+}
+
 // 构建扇形图专用的 datalabels 插件配置
 export function buildPieDatalabelsConfig(config: ChartConfig) {
   if (!config.showLabels) return {};
@@ -891,10 +924,9 @@ export function buildPieDatalabelsConfig(config: ChartConfig) {
       anchor: "center" as const,
       formatter: (_value: number, context: DatalabelsContext) => {
         const ds = context.dataset as ChartDatasetExtended;
-        const total = ds.data.reduce((a: number, b: number) => a + b, 0);
-        if (total === 0) return "";
-        const percentage = ((ds.data[context.dataIndex] / total) * 100).toFixed(0);
-        return `${percentage}%`;
+        const percentages = computeIntegerPercentages(ds.data);
+        const percentage = percentages[context.dataIndex];
+        return percentage === undefined ? "" : `${percentage}%`;
       },
       font: { weight: "bold" as const, size: 12 },
       color: "#fff",
@@ -907,7 +939,17 @@ export function renderPieChart(
   containerEl: HTMLElement,
   chartData: ChartDataResult,
   config: ChartConfig,
-): Chart {
+  // 面板的隐私开关：打开时 tooltip 里的金额打码（扇区比例仍然可见）
+  hideAmounts: boolean = false,
+): Chart | null {
+  // 空数据保护：面板的饼图页直接调用本函数且没有 try/catch，
+  // 之前无条件读 datasets[0] 会抛错并中断整个面板渲染。
+  const dataset = chartData.datasets[0];
+  if (!dataset || dataset.data.length === 0) {
+    containerEl.createDiv({ cls: "cashlog-empty", text: t("error.noData") });
+    return null;
+  }
+
   const { canvas } = createChartContainer(containerEl, config);
 
   return new Chart(canvas, {
@@ -915,9 +957,9 @@ export function renderPieChart(
     data: {
       labels: chartData.labels,
       datasets: [{
-        label: chartData.datasets[0].label,
-        data: chartData.datasets[0].data,
-        backgroundColor: chartData.datasets[0].backgroundColor,
+        label: dataset.label,
+        data: dataset.data,
+        backgroundColor: dataset.backgroundColor,
         borderColor: "var(--background-primary, #ffffff)",
         borderWidth: 2,
       }],
@@ -936,7 +978,8 @@ export function renderPieChart(
               const displayVal = raw !== undefined ? raw : context.parsed;
               const total = ds.data.reduce((a: number, b: number) => a + b, 0);
               const percentage = total > 0 ? ((context.dataset.data[context.dataIndex] / total) * 100).toFixed(1) : "0.0";
-              return `${context.label}: ${displayVal.toLocaleString()} (${percentage}%)`;
+              const shownValue = hideAmounts ? "***" : displayVal.toLocaleString();
+              return `${context.label}: ${shownValue} (${percentage}%)`;
             },
           },
         },
@@ -982,7 +1025,10 @@ export class CashlogChartRenderChild extends MarkdownRenderChild {
         this.chartInstance = null;
       }
 
-      const query = new Query(this.source, this.plugin.settings);
+      const query = new Query(
+        withGlobalQuery(this.source, this.plugin.settings.globalQuery),
+        this.plugin.settings,
+      );
       const error = query.getError();
 
       if (error) {

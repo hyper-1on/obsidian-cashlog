@@ -2,7 +2,7 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import type CashlogPlugin from "./main";
 import { renderDashboard, DashboardCallbacks } from "./DashboardRenderer";
-import { renderPanelSettings } from "./PanelSettings";
+import { renderPanelSettings, setPanelHideAmounts } from "./PanelSettings";
 import { renderQueryResult } from "./Renderer";
 import { Query } from "./Query/Query";
 import { QueryResult, EntryGroup } from "./Query/Filter";
@@ -13,7 +13,7 @@ import {
 } from "./ChartRenderer";
 import type { ChartDataResult } from "./ChartRenderer";
 import type { ChartConfig } from "./Query/Query";
-import { t, tp, formatMoneyUnsigned } from "./i18n";
+import { t, tp, formatMoney } from "./i18n";
 import { round2 } from "./MoneyUtils";
 
 export const CASHLOG_VIEW_TYPE = "cashlog-panel";
@@ -33,6 +33,8 @@ export class CashlogView extends ItemView {
     initialBalance?: number;
   } | null = null;
   private hideAmounts: boolean = true;
+  // 面板饼图实例：重建内容前必须销毁，否则会泄漏 Chart 实例与 ResizeObserver
+  private pieChart: { destroy(): void } | null = null;
   private panelContentEl: HTMLElement;
   private tabBarEl: HTMLElement;
 
@@ -77,7 +79,20 @@ export class CashlogView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    // 清理
+    this.destroyPieChart();
+  }
+
+  // 饼图实例必须显式销毁：清空容器只会移除 canvas，
+  // Chart 实例与它的 ResizeObserver 会一直留在内存里。
+  private destroyPieChart(): void {
+    this.pieChart?.destroy();
+    this.pieChart = null;
+  }
+
+  // 统一的内容重建入口：先销毁图表，再清空容器
+  private clearPanelContent(): void {
+    this.destroyPieChart();
+    this.panelContentEl.empty();
   }
 
   private renderTabBar(): void {
@@ -101,7 +116,10 @@ export class CashlogView extends ItemView {
     this.subPage = null;
     this.renderTabBar();
 
-    this.panelContentEl.empty();
+    // 设置页里的金额展示也要跟随隐私开关
+    setPanelHideAmounts(this.hideAmounts);
+
+    this.clearPanelContent();
 
     if (tab === "dashboard") {
       const callbacks: DashboardCallbacks = {
@@ -117,7 +135,7 @@ export class CashlogView extends ItemView {
   private toggleHideAmounts(): void {
     this.hideAmounts = !this.hideAmounts;
     if (this.activeTab === "dashboard" && !this.subPage) {
-      this.panelContentEl.empty();
+      this.clearPanelContent();
       const callbacks: DashboardCallbacks = {
         showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
         showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
@@ -132,14 +150,14 @@ export class CashlogView extends ItemView {
       this.subPage = null;
     }
     if (this.activeTab === "dashboard") {
-      this.panelContentEl.empty();
+      this.clearPanelContent();
       const callbacks: DashboardCallbacks = {
         showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
         showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
       };
       renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
     } else if (this.activeTab === "settings") {
-      this.panelContentEl.empty();
+      this.clearPanelContent();
       renderPanelSettings(this.panelContentEl, this.plugin);
     }
   }
@@ -164,7 +182,7 @@ export class CashlogView extends ItemView {
       showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
       showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
     };
-    this.panelContentEl.empty();
+    this.clearPanelContent();
     renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
   }
 
@@ -181,7 +199,7 @@ export class CashlogView extends ItemView {
   private renderSubPage(): void {
     if (!this.subPage) return;
 
-    this.panelContentEl.empty();
+    this.clearPanelContent();
     this.renderBackButton();
 
     // 子页面标题
@@ -232,7 +250,7 @@ export class CashlogView extends ItemView {
     };
 
     const listContainer = this.panelContentEl.createDiv();
-    renderQueryResult(listContainer, result, query, this.plugin);
+    renderQueryResult(listContainer, result, query, this.plugin, this.hideAmounts);
   }
 
   // 账户明细页面：展示初始余额 + 收支/转账/调账分类汇总 + 当前余额 + 条目列表
@@ -293,7 +311,7 @@ export class CashlogView extends ItemView {
       const sign = r.value >= 0 ? "" : "-";
       row.createSpan({
         cls: `cashlog-account-detail-value ${valCls}`,
-        text: `${sign}¥${formatMoneyUnsigned(Math.abs(r.value))}`,
+        text: `${sign}${this.hideAmounts ? "***" : formatMoney(Math.abs(r.value))}`,
       });
     }
 
@@ -305,7 +323,7 @@ export class CashlogView extends ItemView {
     const totalSign = currentBalance >= 0 ? "" : "-";
     totalRow.createSpan({
       cls: `cashlog-account-detail-value ${totalCls}`,
-      text: `${totalSign}¥${formatMoneyUnsigned(Math.abs(currentBalance))}`,
+      text: `${totalSign}${this.hideAmounts ? "***" : formatMoney(Math.abs(currentBalance))}`,
     });
 
     // === 条目列表（使用原有样式） ===
@@ -328,7 +346,7 @@ export class CashlogView extends ItemView {
     };
 
     const listContainer = this.panelContentEl.createDiv();
-    renderQueryResult(listContainer, listResult, listQuery, this.plugin);
+    renderQueryResult(listContainer, listResult, listQuery, this.plugin, this.hideAmounts);
   }
 
   // 渲染扇形图子页面
@@ -389,7 +407,7 @@ export class CashlogView extends ItemView {
 
     // 创建子容器避免 createChartContainer 清空返回按钮和标题
     const chartContainer = this.panelContentEl.createDiv();
-    renderPieChart(chartContainer, chartData, chartConfig);
+    this.pieChart = renderPieChart(chartContainer, chartData, chartConfig, this.hideAmounts);
   }
 }
 

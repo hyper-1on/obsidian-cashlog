@@ -4,10 +4,11 @@ import { FilterFunction, Sorter, Grouper, QueryResult, EntryGroup, Summary } fro
 import { parseFilter } from "./FilterParser";
 import type { CashlogSettings } from "../Settings";
 import { round2 } from "../MoneyUtils";
+import { t, tp } from "../i18n";
 
 // 表格列配置
 export interface TableColConfig {
-  field: "date" | "amount" | "description" | "link" | "account" | "attachment";
+  field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
   header: string;
   align: "left" | "center" | "right";
 }
@@ -31,6 +32,99 @@ export function createDefaultTableConfig(): TableConfig {
       { field: "link", header: "", align: "left" },
     ],
   };
+}
+
+// 表格列数上限
+export const MAX_TABLE_COLS = 6;
+
+// colN 可用的列字段
+export const TABLE_COL_FIELDS: TableColConfig["field"][] = [
+  "date",
+  "amount",
+  "account",
+  "description",
+  "attachment",
+  "link",
+  "type",
+];
+
+// 单条表格指令（table columns / colN）的解析结果
+export interface TableDirective {
+  kind: "columns" | "col";
+  colCount?: number;
+  colIndex?: number;
+  field?: TableColConfig["field"];
+  header?: string;
+  align?: TableColConfig["align"];
+  error?: string;
+}
+
+// 解析 table columns / colN 行；返回 null 表示该行不是表格指令。
+// 越界或非法字段不静默忽略，而是带回错误信息，交由调用方报给用户。
+export function parseTableDirective(line: string): TableDirective | null {
+  const colCountMatch = line.match(/^table\s+columns\s+(\d+)/i);
+  if (colCountMatch) {
+    const count = parseInt(colCountMatch[1], 10);
+    if (!Number.isFinite(count) || count < 1 || count > MAX_TABLE_COLS) {
+      return {
+        kind: "columns",
+        error: tp("error.tableColumnsOutOfRange", { line, max: MAX_TABLE_COLS }),
+      };
+    }
+    return { kind: "columns", colCount: count };
+  }
+
+  const colMatch = line.match(/^col(\d+)\s+(\w+)(?:\s+"([^"]*)")?(?:\s+(left|center|right))?$/i);
+  if (colMatch) {
+    const colNumber = parseInt(colMatch[1], 10);
+    if (!Number.isFinite(colNumber) || colNumber < 1 || colNumber > MAX_TABLE_COLS) {
+      return {
+        kind: "col",
+        error: tp("error.tableColumnIndexOutOfRange", { line, max: MAX_TABLE_COLS }),
+      };
+    }
+    const field = colMatch[2].toLowerCase();
+    if (!TABLE_COL_FIELDS.includes(field as TableColConfig["field"])) {
+      return {
+        kind: "col",
+        error: tp("error.tableColumnFieldUnsupported", {
+          field,
+          options: TABLE_COL_FIELDS.join(", "),
+        }),
+      };
+    }
+    return {
+      kind: "col",
+      colIndex: colNumber - 1,
+      field: field as TableColConfig["field"],
+      header: colMatch[3],
+      align: colMatch[4] as TableColConfig["align"] | undefined,
+    };
+  }
+
+  return null;
+}
+
+// 把一条表格指令应用到配置上；返回错误信息，null 表示成功
+export function applyTableDirective(config: TableConfig, directive: TableDirective): string | null {
+  if (directive.error) return directive.error;
+
+  if (directive.kind === "columns") {
+    config.colCount = directive.colCount!;
+    return null;
+  }
+
+  const index = directive.colIndex!;
+  while (config.cols.length <= index) {
+    config.cols.push({ field: "date", header: "", align: "left" });
+  }
+  config.cols[index] = {
+    field: directive.field!,
+    // 未写表头时保留原值；显式写了空表头 "" 则清空
+    header: directive.header !== undefined ? directive.header : config.cols[index].header,
+    align: directive.align ?? config.cols[index].align,
+  };
+  return null;
 }
 
 // 图表类型
@@ -98,36 +192,29 @@ export function createDefaultChartConfig(): ChartConfig {
   };
 }
 
-// 从源码解析表格配置
+// 周分组键（YYYY-WW + 本地化的“周”后缀）。
+// ChartRenderer 的 split by week 也用同一格式做匹配，必须共用这一个函数。
+export function formatWeekKey(date: { format(pattern: string): string }): string {
+  return `${date.format("GGGG-WW")}${t("group.weekSuffix")}`;
+}
+
+// 把设置中的全局查询追加到用户查询之后。
+// globalQuery 是设置页里可配置的「每次查询都追加的指令」，
+// 此前只有 UI 与存储，没有任何地方真正应用它。
+export function withGlobalQuery(source: string, globalQuery?: string): string {
+  const extra = (globalQuery ?? "").trim();
+  return extra ? `${source}\n${extra}` : source;
+}
+
+// 从源码解析表格配置（与 Query 共用同一套指令解析，避免两处实现漂移）
 export function parseTableConfig(source: string): TableConfig {
   const config = createDefaultTableConfig();
-  const lines = source.split("\n");
-
-  for (const line of lines) {
-    // 表格列数
-    const colCountMatch = line.match(/^table\s+columns\s+(\d+)/i);
-    if (colCountMatch) {
-      config.colCount = Math.min(6, Math.max(1, parseInt(colCountMatch[1])));
-      continue;
-    }
-
-    // 列配置
-    const colMatch = line.match(/^col([1-6])\s+(\w+)(?:\s+"([^"]*)")?(?:\s+(left|center|right))?$/i);
-    if (colMatch) {
-      const idx = parseInt(colMatch[1]) - 1;
-      const field = colMatch[2].toLowerCase() as TableColConfig["field"];
-      if (["date", "amount", "description", "link", "account", "attachment"].includes(field)) {
-        config.cols[idx].field = field;
-      }
-      if (colMatch[3]) {
-        config.cols[idx].header = colMatch[3];
-      }
-      if (colMatch[4]) {
-        config.cols[idx].align = colMatch[4] as TableColConfig["align"];
-      }
-    }
+  for (const line of source.split("\n")) {
+    const directive = parseTableDirective(line.trim());
+    if (!directive) continue;
+    // 指令错误由 Query 侧统一呈现给用户，这里只取有效配置
+    applyTableDirective(config, directive);
   }
-
   return config;
 }
 
@@ -138,7 +225,7 @@ export function parseChartConfig(source: string): ChartConfig {
 
   for (const line of lines) {
     // chart type
-    const typeMatch = line.match(/^chart\s+type\s+(bar|line|pie)/i);
+    const typeMatch = line.match(/^chart\s+type\s+(table|bar|line|pie)/i);
     if (typeMatch) {
       config.type = typeMatch[1].toLowerCase() as ChartDisplayType;
       continue;
@@ -216,7 +303,7 @@ export function parseChartConfig(source: string): ChartConfig {
 
 // 生成所有分组键组合（笛卡尔积，用于多账户转账条目分发到各账户分组）
 function combineKeyOptions(options: string[][]): string[] {
-  if (options.length === 0) return ["全部"];
+  if (options.length === 0) return [t("group.all")];
   let results: string[] = options[0];
   for (let i = 1; i < options.length; i++) {
     const next: string[] = [];
@@ -253,15 +340,7 @@ export class Query {
   private settings: CashlogSettings;
 
   // 表格选项
-  private chartTableColCount: number = 6;
-  private chartTableCols: TableColConfig[] = [
-    { field: "date", header: "", align: "left" },
-    { field: "amount", header: "", align: "left" },
-    { field: "account", header: "", align: "left" },
-    { field: "description", header: "", align: "left" },
-    { field: "attachment", header: "", align: "left" },
-    { field: "link", header: "", align: "left" },
-  ];
+  private chartTableConfig: TableConfig = createDefaultTableConfig();
 
   // 图表选项
   private _displayChartType: ChartDisplayType = "table";
@@ -299,28 +378,12 @@ export class Query {
     if (line === "" || line.startsWith("#")) return;
     const trimLine = line.trim().toLowerCase();
 
-    // 表格列数
-    const colCountMatch = line.match(/^table\s+columns\s+(\d+)/i);
-    if (colCountMatch) {
-      this.chartTableColCount = Math.min(6, Math.max(1, parseInt(colCountMatch[1])));
-      return;
-    }
-
-    // 列配置 col1-col6
-    const colMatch = line.match(/^col([1-6])\s+(\w+)(?:\s+"([^"]*)")?(?:\s+(left|center|right))?$/i);
-    if (colMatch) {
-      const colIndex = parseInt(colMatch[1]) - 1;
-      if (colIndex < this.chartTableCols.length) {
-        const field = colMatch[2].toLowerCase() as TableColConfig["field"];
-        if (["date", "amount", "description", "link", "account", "attachment"].includes(field)) {
-          this.chartTableCols[colIndex].field = field;
-        }
-        if (colMatch[3]) {
-          this.chartTableCols[colIndex].header = colMatch[3];
-        }
-        if (colMatch[4]) {
-          this.chartTableCols[colIndex].align = colMatch[4] as TableColConfig["align"];
-        }
+    // 表格指令：table columns / colN
+    const tableDirective = parseTableDirective(line);
+    if (tableDirective) {
+      const directiveError = applyTableDirective(this.chartTableConfig, tableDirective);
+      if (directiveError) {
+        this.error = directiveError;
       }
       return;
     }
@@ -371,7 +434,7 @@ export class Query {
       this.showGroupSubtotal = true;
       return;
     }
-    const showMatch = line.match(/^show\s+(total|total income|total expense|balance|count)/i);
+    const showMatch = line.match(/^show\s+(total income|total expense|total|balance|count)\s*$/i);
     if (showMatch) {
       const what = showMatch[1].toLowerCase();
       switch (what) {
@@ -425,7 +488,7 @@ export class Query {
     }
 
     // chart type
-    const chartTypeMatch = line.match(/^chart\s+type\s+(bar|line|pie)/i);
+    const chartTypeMatch = line.match(/^chart\s+type\s+(table|bar|line|pie)/i);
     if (chartTypeMatch) {
       this._displayChartType = chartTypeMatch[1].toLowerCase() as ChartDisplayType;
       return;
@@ -509,7 +572,7 @@ export class Query {
     }
 
     // 未知指令
-    this.error = `未知指令: ${line}`;
+    this.error = tp("error.unknownDirective", { line });
   }
 
   // 执行查询
@@ -569,7 +632,7 @@ export class Query {
   // 分组
   private group(entries: CashlogEntry[]): EntryGroup[] {
     if (this.groupers.length === 0) {
-      return [{ key: "全部", entries }];
+      return [{ key: t("group.all"), entries }];
     }
 
     const isTagGroup = this.groupers.some((g) => g.field === "tag");
@@ -582,40 +645,40 @@ export class Query {
       for (const grouper of this.groupers) {
         switch (grouper.field) {
           case "tag":
-            keyOptions.push([entry.primaryTag || "无标签"]);
+            keyOptions.push([entry.primaryTag || t("group.noTag")]);
             break;
           case "date":
-            keyOptions.push([entry.date ? entry.date.format("YYYY-MM-DD") : "无日期"]);
+            keyOptions.push([entry.date ? entry.date.format("YYYY-MM-DD") : t("group.noDate")]);
             break;
           case "week":
-            keyOptions.push([entry.date ? entry.date.format("GGGG-WW") + "周" : "无日期"]);
+            keyOptions.push([entry.date ? formatWeekKey(entry.date) : t("group.noDate")]);
             break;
           case "month":
-            keyOptions.push([entry.date ? entry.date.format("YYYY-MM") : "无日期"]);
+            keyOptions.push([entry.date ? entry.date.format("YYYY-MM") : t("group.noDate")]);
             break;
           case "year":
-            keyOptions.push([entry.date ? entry.date.format("YYYY") : "无日期"]);
+            keyOptions.push([entry.date ? entry.date.format("YYYY") : t("group.noDate")]);
             break;
           case "account": {
             const accts = entry.accountAmounts.map((aa) => aa.account).filter(Boolean);
-            keyOptions.push(accts.length > 0 ? accts : ["无账户"]);
+            keyOptions.push(accts.length > 0 ? accts : [t("group.noAccount")]);
             break;
           }
           case "type": {
             const typeLabels: Record<string, string> = {
-              normal: "其他",
-              transfer: "转账",
-              balanceChange: "余额变更",
+              normal: t("group.typeOther"),
+              transfer: t("group.typeTransfer"),
+              balanceChange: t("group.typeBalanceChange"),
             };
             let typeKey: string;
             if (entry.entryType !== "normal") {
               typeKey = typeLabels[entry.entryType] || entry.entryType;
             } else if (entry.isIncome) {
-              typeKey = "收入";
+              typeKey = t("group.typeIncome");
             } else if (entry.isExpense) {
-              typeKey = "支出";
+              typeKey = t("group.typeExpense");
             } else {
-              typeKey = "其他";
+              typeKey = t("group.typeOther");
             }
             keyOptions.push([typeKey]);
             break;
@@ -683,8 +746,8 @@ export class Query {
   get listStyle(): "unordered" | "ordered" | "none" { return this._listStyle; }
 
   // 表格选项 getter
-  get tableColCount(): number { return this.chartTableColCount; }
-  get tableCols(): TableColConfig[] { return this.chartTableCols; }
+  get tableColCount(): number { return this.chartTableConfig.colCount; }
+  get tableCols(): TableColConfig[] { return this.chartTableConfig.cols; }
 
   // 图表选项 getter
   get displayChartType(): ChartDisplayType { return this._displayChartType; }

@@ -36,8 +36,9 @@ export function computePeriodRange(
   statsMonthStartDay: number,
   startDate?: string,
   endDate?: string,
+  // 可注入「当前时刻」，便于测试与自定义周期复用；默认取当前时刻
+  now: Moment = moment(),
 ): DateRange | null {
-  const now = moment();
   switch (period) {
     case "day":
       return new DateRange(now.clone().startOf("day"), now.clone().endOf("day"));
@@ -52,12 +53,16 @@ export function computePeriodRange(
     }
     case "month":
     case "monthly": {
+      // 起始日可能大于某个月的天数（29-31 日遇上 2 月等），必须按目标月份夹取：
+      // moment 的 date(31) 会溢出到下个月，导致统计周期区间错位。
+      const clampDay = (m: Moment): number => Math.min(statsMonthStartDay, m.daysInMonth());
       const currentDay = now.date();
       let start: Moment;
-      if (currentDay >= statsMonthStartDay) {
-        start = now.clone().date(statsMonthStartDay).startOf("day");
+      if (currentDay >= clampDay(now)) {
+        start = now.clone().date(clampDay(now)).startOf("day");
       } else {
-        start = now.clone().subtract(1, "months").date(statsMonthStartDay).startOf("day");
+        const prevMonth = now.clone().subtract(1, "months");
+        start = prevMonth.date(clampDay(prevMonth)).startOf("day");
       }
       return new DateRange(start, now.clone().endOf("day"));
     }

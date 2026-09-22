@@ -2,6 +2,7 @@
 import { type App, type Vault } from "obsidian";
 import { moment } from "./types";
 import type { CashlogSettings } from "./Settings";
+import { t } from "./i18n";
 
 export class AttachmentManager {
   constructor(
@@ -10,9 +11,18 @@ export class AttachmentManager {
     private settings: CashlogSettings,
   ) {}
 
-  // 生成唯一附件文件名
-  generateFileName(): string {
-    return `cashlog-${moment().format("YYYYMMDDHHmmssSSS")}`;
+  // 生成附件文件名：毫秒时间戳 + 冲突序号。
+  // 同一毫秒内多选上传（多次调用都落在同一毫秒）会生成相同时间戳，
+  // 不做唯一化会导致 createBinary 因文件已存在而失败、附件丢失。
+  generateFileName(extension: string): string {
+    const base = `cashlog-${moment().format("YYYYMMDDHHmmssSSS")}`;
+    const folder = this.settings.attachmentFolder;
+    let candidate = `${base}.${extension}`;
+    let counter = 1;
+    while (this.vault.getAbstractFileByPath(`${folder}/${candidate}`)) {
+      candidate = `${base}-${counter++}.${extension}`;
+    }
+    return candidate;
   }
 
   // 确保附件文件夹存在
@@ -28,10 +38,9 @@ export class AttachmentManager {
   async saveAttachment(file: File): Promise<string> {
     await this.ensureAttachmentFolder();
 
-    const baseName = this.generateFileName();
     // 保留原始文件扩展名
     const ext = file.name.includes(".") ? file.name.split(".").pop() || "png" : "png";
-    const fileName = `${baseName}.${ext}`;
+    const fileName = this.generateFileName(ext);
     const filePath = `${this.settings.attachmentFolder}/${fileName}`;
 
     // 读取文件内容为 ArrayBuffer
@@ -41,7 +50,7 @@ export class AttachmentManager {
     await this.vault.createBinary(filePath, arrayBuffer);
 
     // 返回 wikilink 字符串（用于嵌入到记账行）
-    return `${fileName}|附件`;
+    return `${fileName}|${t("attachment.defaultName")}`;
   }
 
   // 删除附件文件

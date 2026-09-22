@@ -6,13 +6,19 @@ import type { CashlogSettings } from "./Settings";
 import { AccountManager } from "./AccountManager";
 import { BudgetManager, computePeriodRange } from "./BudgetManager";
 import { DateRange } from "./Query/DateRange";
-import { t, tp, formatMoney, formatMoneyUnsigned } from "./i18n";
+import { t, tp, formatMoney } from "./i18n";
 import { round2 } from "./MoneyUtils";
 
 // 仪表盘回调接口
 export interface DashboardCallbacks {
   showEntries: (entries: CashlogEntry[], title: string, extra?: { accountName?: string; initialBalance?: number }) => void;
   showPieChart: (entries: CashlogEntry[], expenseTag: string) => void;
+}
+
+// 面板内的金额展示：隐私开关打开时统一打码。
+// 此前只有摘要卡片与账户表做了处理，预算/目标/最近交易/排行/明细/tooltip 都仍是明文。
+function panelAmount(value: number, hideAmounts: boolean): string {
+  return hideAmounts ? "***" : formatMoney(value);
 }
 
 export function renderDashboard(container: HTMLElement, plugin: CashlogPlugin, callbacks: DashboardCallbacks, hideAmounts: boolean, onToggleHide: () => void): void {
@@ -73,7 +79,7 @@ export function renderDashboard(container: HTMLElement, plugin: CashlogPlugin, c
       settings.statsWeekStartDay,
       settings.statsMonthStartDay,
     );
-    renderBudgetProgress(container, budgetProgress, callbacks);
+    renderBudgetProgress(container, budgetProgress, callbacks, hideAmounts);
   }
 
   // 目标进度（如开启目标功能）
@@ -84,7 +90,7 @@ export function renderDashboard(container: HTMLElement, plugin: CashlogPlugin, c
       settings.statsWeekStartDay,
       settings.statsMonthStartDay,
     );
-    renderGoalProgress(container, goalProgress, callbacks);
+    renderGoalProgress(container, goalProgress, callbacks, hideAmounts);
   }
 
   // 最近交易（复用已分类的 normalEntries）
@@ -95,11 +101,11 @@ export function renderDashboard(container: HTMLElement, plugin: CashlogPlugin, c
       return db - da;
     })
     .slice(0, 10);
-  renderRecentEntries(container, recentEntries);
+  renderRecentEntries(container, recentEntries, hideAmounts);
 
   // 支出分类排行（复用已分离的 expenseEntries）
   if (totalExpense > 0) {
-    renderCategoryRankFromEntries(container, expenseEntries, periodEntries, settings, callbacks);
+    renderCategoryRankFromEntries(container, expenseEntries, periodEntries, settings, callbacks, hideAmounts);
   }
 }
 
@@ -195,9 +201,7 @@ function renderCard(
   card.createDiv({ cls: "cashlog-card-label", text: label });
   const formatted = label === t("dashboard.card.count")
     ? String(value)
-    : hideAmounts
-      ? "***"
-      : formatMoney(value);
+    : panelAmount(value, hideAmounts);
   card.createDiv({ cls: "cashlog-card-value", text: formatted });
 
   if (onClick) {
@@ -221,9 +225,7 @@ function renderAccountBalances(
   for (const b of balances) {
     const row = table.createEl("tr");
     row.createEl("td", { text: `💳 ${b.account}`, cls: "cashlog-account-name" });
-    const amount = hideAmounts
-      ? "***"
-      : formatMoney(b.balance);
+    const amount = panelAmount(b.balance, hideAmounts);
     const valueCls = b.balance >= 0 ? "cashlog-amount-income" : "cashlog-amount-expense";
     row.createEl("td", { text: amount, cls: valueCls });
 
@@ -246,6 +248,7 @@ function renderBudgetProgress(
   container: HTMLElement,
   progress: Array<{ config: { name: string; amount: number; tag?: string; period?: string }; spent: number; remaining: number; percentage: number; isOverspent: boolean; matchingEntries: CashlogEntry[] }>,
   callbacks: DashboardCallbacks,
+  hideAmounts: boolean,
 ): void {
   const section = container.createDiv({ cls: "cashlog-section" });
   section.createEl("h4", { text: t("dashboard.section.budgetProgress"), cls: "cashlog-section-title" });
@@ -256,7 +259,7 @@ function renderBudgetProgress(
     header.createSpan({ text: p.config.name });
     const periodLabel = p.config.period ? ` · ${p.config.period}` : "";
     header.createSpan({
-      text: `¥${formatMoneyUnsigned(p.spent)} / ¥${formatMoneyUnsigned(p.config.amount)}${periodLabel}`,
+      text: `${panelAmount(p.spent, hideAmounts)} / ${panelAmount(p.config.amount, hideAmounts)}${periodLabel}`,
       cls: p.isOverspent ? "cashlog-amount-expense" : "",
     });
 
@@ -278,6 +281,7 @@ function renderGoalProgress(
   container: HTMLElement,
   progress: Array<{ config: { name: string; targetAmount: number; tag?: string; period?: string }; earned: number; remaining: number; percentage: number; isAchieved: boolean; matchingEntries: CashlogEntry[] }>,
   callbacks: DashboardCallbacks,
+  hideAmounts: boolean,
 ): void {
   const section = container.createDiv({ cls: "cashlog-section" });
   section.createEl("h4", { text: t("dashboard.section.goalProgress"), cls: "cashlog-section-title" });
@@ -288,7 +292,7 @@ function renderGoalProgress(
     header.createSpan({ text: p.config.name });
     const periodLabel = p.config.period ? ` · ${p.config.period}` : "";
     header.createSpan({
-      text: `¥${formatMoneyUnsigned(p.earned)} / ¥${formatMoneyUnsigned(p.config.targetAmount)}${periodLabel}`,
+      text: `${panelAmount(p.earned, hideAmounts)} / ${panelAmount(p.config.targetAmount, hideAmounts)}${periodLabel}`,
       cls: p.isAchieved ? "cashlog-amount-income" : "",
     });
 
@@ -306,7 +310,7 @@ function renderGoalProgress(
 }
 
 // 最近交易
-function renderRecentEntries(container: HTMLElement, entries: CashlogEntry[]): void {
+function renderRecentEntries(container: HTMLElement, entries: CashlogEntry[], hideAmounts: boolean): void {
   const section = container.createDiv({ cls: "cashlog-section" });
   section.createEl("h4", { text: t("dashboard.section.recentTransactions"), cls: "cashlog-section-title" });
 
@@ -330,12 +334,12 @@ function renderRecentEntries(container: HTMLElement, entries: CashlogEntry[]): v
     const amountCls = entry.isIncome ? "cashlog-amount-income" : "cashlog-amount-expense";
     row.createSpan({
       cls: `cashlog-recent-amount ${amountCls}`,
-      text: `${sign}¥${formatMoneyUnsigned(Math.abs(entry.totalAmount))}`,
+      text: `${sign}${panelAmount(Math.abs(entry.totalAmount), hideAmounts)}`,
     });
 
     // 悬浮显示详细信息
     row.addEventListener("mouseenter", (e) => {
-      showTooltip(row, entry, e);
+      showTooltip(row, entry, e, hideAmounts);
     });
     row.addEventListener("mouseleave", () => {
       hideTooltip();
@@ -351,7 +355,7 @@ function renderRecentEntries(container: HTMLElement, entries: CashlogEntry[]): v
 // 使用闭包变量避免多面板冲突
 let _currentTooltip: HTMLElement | null = null;
 
-function showTooltip(anchor: HTMLElement, entry: CashlogEntry, _event: MouseEvent): void {
+function showTooltip(anchor: HTMLElement, entry: CashlogEntry, _event: MouseEvent, hideAmounts: boolean): void {
   hideTooltip();
 
   _currentTooltip = activeDocument.body.createDiv({ cls: "cashlog-tooltip" });
@@ -385,12 +389,12 @@ function showTooltip(anchor: HTMLElement, entry: CashlogEntry, _event: MouseEven
     for (const aa of entry.accountAmounts) {
       const aaRow = tip.createDiv({ cls: "cashlog-tooltip-row" });
       aaRow.createSpan({ cls: "cashlog-tooltip-label", text: tp("dashboard.tooltip.account", { account: aa.account }) });
-      aaRow.createSpan({ cls: "cashlog-tooltip-value", text: `¥${aa.amount.toFixed(2)}` });
+      aaRow.createSpan({ cls: "cashlog-tooltip-value", text: panelAmount(aa.amount, hideAmounts) });
     }
   } else if (!entry.isTransfer && !entry.isBalanceChange) {
     const amtRow = tip.createDiv({ cls: "cashlog-tooltip-row" });
     amtRow.createSpan({ cls: "cashlog-tooltip-label", text: t("dashboard.tooltip.amount") });
-    amtRow.createSpan({ cls: "cashlog-tooltip-value", text: `¥${entry.amount.toFixed(2)}` });
+    amtRow.createSpan({ cls: "cashlog-tooltip-value", text: panelAmount(entry.amount, hideAmounts) });
   }
 
   // 类型标签
@@ -424,12 +428,16 @@ function renderCategoryRankFromEntries(
   allEntries: CashlogEntry[],
   settings: { expenseTag: string },
   callbacks: DashboardCallbacks,
+  hideAmounts: boolean,
 ): void {
   const section = container.createDiv({ cls: "cashlog-section" });
   const titleEl = section.createEl("h4", { text: t("dashboard.section.categoryRanking"), cls: "cashlog-section-title" });
   titleEl.addEventListener("click", () => {
     callbacks.showPieChart(allEntries, settings.expenseTag);
   });
+
+  // 说明口径：排行只取前 5 名，而点进去的饼图页显示全部分类
+  section.createDiv({ cls: "cashlog-settings-desc", text: t("dashboard.categoryRankHint") });
 
   const categoryMap: Record<string, number> = {};
   const categoryEntryMap: Record<string, CashlogEntry[]> = {};
@@ -445,7 +453,9 @@ function renderCategoryRankFromEntries(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  const totalExpense = ranked.reduce((sum, [, amt]) => sum + amt, 0);
+  // 百分比基数必须是「本期全部支出」：用 Top5 之和会让占比虚高，
+  // 分类多于 5 个时所有占比加起来会等于 100%，产生误导。
+  const totalExpense = expenseEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
 
   for (const [category, amount] of ranked) {
     const pct = totalExpense > 0 ? (amount / totalExpense) * 100 : 0;
@@ -453,7 +463,7 @@ function renderCategoryRankFromEntries(
     const header = item.createDiv({ cls: "cashlog-progress-header" });
     header.createSpan({ text: category });
     header.createSpan({
-      text: `¥${formatMoneyUnsigned(amount)} (${pct.toFixed(1)}%)`,
+      text: `${panelAmount(amount, hideAmounts)} (${pct.toFixed(1)}%)`,
     });
 
     const bar = item.createDiv({ cls: "cashlog-progress-bar" });

@@ -5,7 +5,8 @@ import type { CashlogSettings } from "./Settings";
 import type CashlogPlugin from "./main";
 import { AttachmentManager } from "./AttachmentManager";
 import { AccountManager } from "./AccountManager";
-import { t, tp } from "./i18n";
+import { validateEntryData } from "./EntryEditor";
+import { t, tp, getCurrencySymbol } from "./i18n";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）
@@ -312,8 +313,8 @@ export class CashlogModal extends Modal {
     this.descInputEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.isComposing) {
         e.preventDefault();
-        this.close();
-        this.onSubmit(this.data);
+        // 与「确认」按钮走同一条提交路径，避免绕过校验与附件处理
+        void this.submit();
       }
     });
   }
@@ -533,6 +534,8 @@ export class CashlogModal extends Modal {
         this.plugin.cache.getEntries(),
         this.settings.accountBalances,
         this.settings.accounts,
+        // 编辑既有条目时排除它自身，否则提示的“当前余额”会把旧 delta 算进去
+        this.entry?.location ?? null,
       );
     }
 
@@ -552,6 +555,14 @@ export class CashlogModal extends Modal {
     });
   }
 
+  // 「当前余额」提示文案（货币符号随当前语言变化，避免英文界面显示字面量 {currency}）
+  private formatCurrentBalance(balance: number): string {
+    return tp("cashlogModal.currentBalance", {
+      amount: balance.toFixed(2),
+      currency: getCurrencySymbol(),
+    });
+  }
+
   // 渲染余额变更单行（balances 由父方法预计算传入）
   private renderBalanceChangeRow(listEl: HTMLElement, index: number, balances: Record<string, number>): void {
     const row = listEl.createDiv({ cls: "cashlog-account-row" });
@@ -567,13 +578,12 @@ export class CashlogModal extends Modal {
     // 当前余额提示（使用预计算的余额）
     const balanceHint = row.createSpan({
       cls: "cashlog-balance-hint",
-      text: tp("cashlogModal.currentBalance", { amount: (balances[item.account] || 0).toFixed(2) }),
+      text: this.formatCurrentBalance(balances[item.account] || 0),
     });
 
     select.addEventListener("change", () => {
       this.data.balanceChangeAccounts[index].account = select.value;
-      const newBalance = balances[select.value] || 0;
-      balanceHint.textContent = tp("cashlogModal.currentBalance", { amount: newBalance.toFixed(2) });
+      balanceHint.textContent = this.formatCurrentBalance(balances[select.value] || 0);
     });
 
     // 目标余额输入
@@ -635,7 +645,7 @@ export class CashlogModal extends Modal {
           const tempId = `__pending_${this.pendingIdCounter++}`;
           this.pendingUploads.push({ file, tempId });
           const num = this.data.attachments.length + 1;
-          this.data.attachments.push(`${tempId}|附件${num}`);
+          this.data.attachments.push(`${tempId}|${tp("attachment.numberedName", { n: num })}`);
         }
         this.renumberAttachments();
         this.renderAttachmentList(listEl);
@@ -655,7 +665,7 @@ export class CashlogModal extends Modal {
   private renumberAttachments(): void {
     for (let i = 0; i < this.data.attachments.length; i++) {
       const [fileName] = this.data.attachments[i].split("|");
-      this.data.attachments[i] = `${fileName}|附件${i + 1}`;
+      this.data.attachments[i] = `${fileName}|${tp("attachment.numberedName", { n: i + 1 })}`;
     }
   }
 
@@ -670,7 +680,7 @@ export class CashlogModal extends Modal {
         const [realName] = attStr.split("|");
         for (let i = 0; i < this.data.attachments.length; i++) {
           if (this.data.attachments[i].startsWith(tempId + "|")) {
-            const displayPart = this.data.attachments[i].split("|")[1] || "附件";
+            const displayPart = this.data.attachments[i].split("|")[1] || t("attachment.defaultName");
             this.data.attachments[i] = `${realName}|${displayPart}`;
             break;
           }
@@ -678,11 +688,16 @@ export class CashlogModal extends Modal {
       } catch (e) {
         console.error("附件上传失败:", e);
         new Notice(t("notice.uploadFailed"));
+        // 上传失败时移除临时引用，避免把 __pending_N 这样的内部 id 写进 Markdown
+        this.data.attachments = this.data.attachments.filter(
+          (att) => !att.startsWith(`${tempId}|`),
+        );
       }
     }
 
-    // 删除标记的已有附件
+    // 删除标记的已有附件；仍被其它条目引用的文件只解除引用，不删文件本体
     for (const fileName of this.pendingDeletions) {
+      if (this.isAttachmentReferencedElsewhere(fileName)) continue;
       try {
         await attManager.deleteAttachment(fileName);
       } catch (e) {
@@ -691,6 +706,19 @@ export class CashlogModal extends Modal {
     }
 
     this.renumberAttachments();
+  }
+
+  // 该附件是否仍被其它条目引用。
+  // 删除附件时若直接 trashFile，会破坏其它条目对同一文件的引用（留下坏链），
+  // 因此仅在没有任何其它条目引用时才删除文件本体。
+  private isAttachmentReferencedElsewhere(fileName: string): boolean {
+    const entries = this.plugin?.cache?.getEntries() ?? [];
+    const selfLocation = this.entry?.location ?? null;
+    return entries.some(
+      (entry) =>
+        entry.attachments.some((att) => att.split("|")[0] === fileName) &&
+        !AccountManager.isSameLocation(entry, selfLocation),
+    );
   }
 
   private renderAttachmentList(listEl: HTMLElement): void {
@@ -781,14 +809,37 @@ export class CashlogModal extends Modal {
     });
   }
 
+  // 防止重复提交（回车连按 / 回车与按钮同时触发）
+  private submitting = false;
+
+  // 统一提交入口：确认按钮与描述框回车都必须走这里，
+  // 否则会绕过校验与附件处理（临时附件 id 会被直接写进 Markdown）。
+  private async submit(): Promise<void> {
+    if (this.submitting) return;
+
+    const validationError = validateEntryData(this.data);
+    if (validationError) {
+      new Notice(validationError);
+      return;
+    }
+
+    this.submitting = true;
+    try {
+      await this.processAttachments();
+    } finally {
+      this.submitting = false;
+    }
+
+    this.close();
+    this.onSubmit(this.data);
+  }
+
   // 渲染按钮
   private renderButtons(container: HTMLElement): void {
     new Setting(container)
       .addButton((btn) =>
         btn.setButtonText(t("modal.button.confirm")).setCta().onClick(async () => {
-          await this.processAttachments();
-          this.close();
-          this.onSubmit(this.data);
+          await this.submit();
         }),
       )
       .addButton((btn) =>

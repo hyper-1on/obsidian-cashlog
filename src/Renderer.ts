@@ -6,6 +6,7 @@ import { Query } from "./Query/Query";
 import { CashlogModal, EditableEntryData } from "./CashlogModal";
 import { buildEntryFromModalData } from "./EntryEditor";
 import { extractNoteName, renderAttachmentLink } from "./PathUtils";
+import { resolveEntryLine } from "./EntryLocator";
 import { t, tp } from "./i18n";
 import { round2 } from "./MoneyUtils";
 import { getErrorMessage } from "./ErrorUtils";
@@ -17,6 +18,8 @@ export function renderQueryResult(
   result: QueryResult,
   query: Query,
   plugin: CashlogPlugin,
+  // 面板明细页会传 true，让面板的隐私开关也覆盖到条目列表
+  hideAmounts: boolean = false,
 ): void {
   containerEl.empty();
   containerEl.addClass("cashlog-results");
@@ -40,13 +43,13 @@ export function renderQueryResult(
     }
 
     for (const entry of group.entries) {
-      renderEntry(list, entry, query, plugin, listStyle);
+      renderEntry(list, entry, query, plugin, listStyle, hideAmounts);
     }
 
     // 分组汇总
     if (result.groups.length > 1) {
       const groupSummary = calculateGroupSummary(group.entries);
-      renderGroupSummary(containerEl, groupSummary);
+      renderGroupSummary(containerEl, groupSummary, hideAmounts);
     }
   }
 
@@ -58,7 +61,7 @@ export function renderQueryResult(
     query.shouldShowBalance ||
     query.shouldShowCount
   ) {
-    renderSummary(containerEl, result.summary, query);
+    renderSummary(containerEl, result.summary, query, hideAmounts);
   }
 }
 
@@ -69,9 +72,11 @@ function renderEntry(
   query: Query,
   plugin: CashlogPlugin,
   listStyle: "unordered" | "ordered" | "none" = "unordered",
+  hideAmounts: boolean = false,
 ): void {
   const tag = listStyle === "none" ? "div" : "li";
   const li = list.createEl(tag, { cls: "cashlog-entry" });
+  const amountText = (value: number): string => (hideAmounts ? "***" : String(value));
 
   // 标签
   if (!query.shouldHideTag && entry.tags.length > 0) {
@@ -95,7 +100,7 @@ function renderEntry(
     for (const aa of entry.accountAmounts) {
       li.createSpan({
         cls: `cashlog-account ${aa.amount < 0 ? "cashlog-transfer-from" : "cashlog-transfer-to"}`,
-        text: `💳${aa.account}💴${aa.amount}`,
+        text: `💳${aa.account}💴${amountText(aa.amount)}`,
       });
     }
   } else {
@@ -106,7 +111,7 @@ function renderEntry(
         const amountClass = entry.isExpense ? "cashlog-amount-expense" : "cashlog-amount-income";
         li.createSpan({
           cls: `cashlog-amount ${amountClass}`,
-          text: `💴${noAcct}`,
+          text: `💴${amountText(noAcct)}`,
         });
       }
     }
@@ -115,7 +120,7 @@ function renderEntry(
     for (const aa of entry.accountAmounts) {
       li.createSpan({
         cls: "cashlog-account",
-        text: `💳${aa.account}💴${aa.amount}`,
+        text: `💳${aa.account}💴${amountText(aa.amount)}`,
       });
     }
   }
@@ -189,6 +194,8 @@ function openEditModal(plugin: CashlogPlugin, entry: CashlogEntry): void {
 
   const writeToFile = (data: EditableEntryData) => {
     if (!entry.location) return;
+    // 收窄后固定下来，闭包内不再重复判空
+    const location = entry.location;
 
     // 余额变更需要校验缓存是否就绪
     if (data.tagType === "balanceChange") {
@@ -200,15 +207,21 @@ function openEditModal(plugin: CashlogPlugin, entry: CashlogEntry): void {
     const newEntry = buildEntryFromModalData(data, plugin, {
       indentation: entry.indentation,
       listMarker: entry.listMarker,
-      location: entry.location ?? null,
+      location,
     });
     const newLine = newEntry.toFileLineString();
 
-    const file = app.vault.getAbstractFileByPath(entry.location.path);
+    const file = app.vault.getAbstractFileByPath(location.path);
     if (file instanceof TFile) {
       app.vault.process(file, (content) => {
         const lines = content.split("\n");
-        lines[entry.location.lineNumber] = newLine;
+        // 索引快照可能已过期：先校验行号处内容，再全局唯一匹配，避免改写别的行
+        const targetLine = resolveEntryLine(lines, entry.originalMarkdown, location.lineNumber);
+        if (targetLine === null) {
+          new Notice(t("error.entryNotFound"));
+          return content;
+        }
+        lines[targetLine] = newLine;
         return lines.join("\n");
       }).catch((e) => {
         new Notice(t("error.queryError") + ": " + getErrorMessage(e));
@@ -275,45 +288,55 @@ function calculateGroupSummary(entries: CashlogEntry[]): Summary {
   };
 }
 
+// 汇总行里的金额展示：隐私开关打开时打码（笔数不是金额，不打码）
+function summaryAmount(value: number, hideAmounts: boolean): string {
+  return hideAmounts ? "***" : String(value);
+}
+
 // 渲染分组汇总
-function renderGroupSummary(containerEl: HTMLElement, summary: Summary): void {
+function renderGroupSummary(containerEl: HTMLElement, summary: Summary, hideAmounts: boolean = false): void {
   const div = containerEl.createDiv({ cls: "cashlog-group-summary" });
   if (summary.totalExpense !== 0) {
     div.createSpan({
       cls: "cashlog-summary-expense",
-      text: tp("renderer.groupExpense", { amount: summary.totalExpense }),
+      text: tp("renderer.groupExpense", { amount: summaryAmount(summary.totalExpense, hideAmounts) }),
     });
   }
   if (summary.totalIncome !== 0) {
     div.createSpan({
       cls: "cashlog-summary-income",
-      text: tp("renderer.groupIncome", { amount: summary.totalIncome }),
+      text: tp("renderer.groupIncome", { amount: summaryAmount(summary.totalIncome, hideAmounts) }),
     });
   }
 }
 
 // 渲染总汇总
-function renderSummary(containerEl: HTMLElement, summary: Summary, query: Query): void {
+function renderSummary(
+  containerEl: HTMLElement,
+  summary: Summary,
+  query: Query,
+  hideAmounts: boolean = false,
+): void {
   const div = containerEl.createDiv({ cls: "cashlog-summary" });
 
   if (query.shouldShowTotalExpense || query.shouldShowTotal) {
     div.createDiv({
       cls: "cashlog-summary-expense",
-      text: tp("renderer.totalExpense", { amount: summary.totalExpense }),
+      text: tp("renderer.totalExpense", { amount: summaryAmount(summary.totalExpense, hideAmounts) }),
     });
   }
 
   if (query.shouldShowTotalIncome || query.shouldShowTotal) {
     div.createDiv({
       cls: "cashlog-summary-income",
-      text: tp("renderer.totalIncome", { amount: summary.totalIncome }),
+      text: tp("renderer.totalIncome", { amount: summaryAmount(summary.totalIncome, hideAmounts) }),
     });
   }
 
   if (query.shouldShowBalance || query.shouldShowTotal) {
     div.createDiv({
       cls: "cashlog-summary-balance",
-      text: tp("renderer.netBalance", { amount: summary.balance }),
+      text: tp("renderer.netBalance", { amount: summaryAmount(summary.balance, hideAmounts) }),
     });
   }
 

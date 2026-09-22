@@ -2,10 +2,10 @@
 import { App, Notice, PluginSettingTab, Setting, normalizePath } from "obsidian";
 import { FolderSuggest } from "./FolderSuggest";
 import type CashlogPlugin from "./main";
-import { DEFAULT_SETTINGS } from "./Settings";
+import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { openTagEditModal } from "./ModalHelpers";
-import { t } from "./i18n";
+import { t, formatMoney } from "./i18n";
 import { getErrorMessage } from "./ErrorUtils";
 
 let budgetIdCounter = 0;
@@ -355,8 +355,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
       .setDesc(t("settings.reset.desc"))
       .addButton((btn) =>
         btn.setButtonText(t("modal.button.reset")).onClick(async () => {
-          this.plugin.settings = Object.assign({}, DEFAULT_SETTINGS);
-          await this.plugin.saveSettings();
+          // 就地重置以保持 settings 引用不变（Cache 持有该引用），
+          // 并重建索引，否则标签/路径类设置对已索引数据不生效。
+          Object.assign(this.plugin.settings, createDefaultSettings());
+          await this.plugin.saveSettingsAndReindex();
           this.display();
         }),
       );
@@ -373,7 +375,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       };
       new Setting(container)
         .setName(budget.name || `预算 #${i + 1}`)
-        .setDesc(`¥${budget.amount} / ${periodLabels[budget.period] || budget.period}，标签：${budget.tag}`)
+        .setDesc(`${formatMoney(budget.amount)} / ${periodLabels[budget.period] || budget.period}，标签：${budget.tag}`)
         .addButton((btn) =>
           btn.setButtonText(t("modal.button.delete")).onClick(async () => {
             this.plugin.settings.budgets.splice(i, 1);
@@ -438,7 +440,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       };
       new Setting(container)
         .setName(goal.name || `目标 #${i + 1}`)
-        .setDesc(`¥${goal.targetAmount} / ${periodLabels[goal.period] || goal.period}，标签：${goal.tag}`)
+        .setDesc(`${formatMoney(goal.targetAmount)} / ${periodLabels[goal.period] || goal.period}，标签：${goal.tag}`)
         .addButton((btn) =>
           btn.setButtonText(t("modal.button.delete")).onClick(async () => {
             this.plugin.settings.goals.splice(i, 1);

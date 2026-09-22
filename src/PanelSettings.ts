@@ -2,10 +2,10 @@
 import { Menu, Notice, normalizePath } from "obsidian";
 import { FolderSuggest } from "./FolderSuggest";
 import type CashlogPlugin from "./main";
-import { DEFAULT_SETTINGS } from "./Settings";
+import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { validateSubTagName, validateAccountName } from "./TagValidation";
-import { t, tp } from "./i18n";
+import { t, tp, formatMoney } from "./i18n";
 import { getErrorMessage } from "./ErrorUtils";
 
 let panelBudgetId = 0;
@@ -22,6 +22,15 @@ import {
   finishModal,
   openTagEditModal,
 } from "./ModalHelpers";
+
+// 面板隐私开关的当前状态。
+// 设置页的渲染函数层级很深、重建入口有十几处，用模块级状态同步，
+// 避免把 hideAmounts 参数一路穿过所有闭包。
+let panelHideAmounts = false;
+
+export function setPanelHideAmounts(hideAmounts: boolean): void {
+  panelHideAmounts = hideAmounts;
+}
 
 export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugin): void {
   // 保存滚动位置
@@ -272,8 +281,8 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
     });
     btn.addEventListener("click", () => {
       void (async () => {
-        Object.assign(s, DEFAULT_SETTINGS);
-        await plugin.saveSettings();
+        Object.assign(s, createDefaultSettings());
+        await plugin.saveSettingsAndReindex();
         renderPanelSettings(container, plugin);
       })();
     });
@@ -924,6 +933,25 @@ function discoverAccountsFromCache(plugin: CashlogPlugin): string[] {
   return [...found];
 }
 
+// 把笔记里发现、但未登记的账户加入账户列表（虚线 chip 左键一键登记）。
+// 未登记账户的金额不会被计入任何余额，此前只能手动新建一个同名账户才能补救。
+async function registerDiscoveredAccount(
+  account: string,
+  plugin: CashlogPlugin,
+  refreshPanel: () => void,
+): Promise<void> {
+  const s = plugin.settings;
+  if (s.accounts.includes(account)) return;
+
+  s.accounts.push(account);
+  if (s.accountBalances[account] === undefined) {
+    s.accountBalances[account] = 0;
+  }
+  await plugin.saveSettings();
+  new Notice(tp("notice.accountRegistered", { name: account }));
+  refreshPanel();
+}
+
 // 账户 chip 列表
 function renderAccountList(container: HTMLElement, plugin: CashlogPlugin): void {
   const s = plugin.settings;
@@ -957,13 +985,21 @@ function renderAccountList(container: HTMLElement, plugin: CashlogPlugin): void 
     }
   }
 
+  const unregistered: string[] = [];
+
   for (const acct of allAccounts) {
     const isFromCache = !s.accounts.includes(acct);
+    if (isFromCache) unregistered.push(acct);
 
     const chip = activeDocument.createElement("span");
     chip.className = "cashlog-subtag-chip";
     if (isFromCache) {
       chip.classList.add("cashlog-subtag-chip-cache");
+      // A：未登记账户一键登记，避免“笔记里有钱、余额里却没有”
+      chip.title = t("panelSettings.cacheAccountHint");
+      chip.addEventListener("click", () => {
+        void registerDiscoveredAccount(acct, plugin, refreshPanel);
+      });
     }
     chip.textContent = acct;
 
@@ -992,6 +1028,14 @@ function renderAccountList(container: HTMLElement, plugin: CashlogPlugin): void 
     });
 
     chipContainer.appendChild(chip);
+  }
+
+  // C：把「未登记」这件事明确说出来，而不是让金额静默消失
+  if (unregistered.length > 0) {
+    const hint = activeDocument.createElement("div");
+    hint.className = "cashlog-settings-desc cashlog-cache-account-hint";
+    hint.textContent = t("panelSettings.cacheAccountNotice");
+    container.appendChild(hint);
   }
 
   // + 添加按钮
@@ -1218,7 +1262,7 @@ function renderBalanceButton(
 
   const btn = activeDocument.createElement("button");
   btn.className = "cashlog-settings-btn cashlog-settings-btn-tag";
-  btn.textContent = `💴 ${balance.toFixed(2)}`;
+  btn.textContent = `💴 ${panelHideAmounts ? "***" : balance.toFixed(2)}`;
   btn.addEventListener("click", () => {
     openBalanceEditModal(container, acct, balance, plugin);
   });
@@ -1306,7 +1350,7 @@ function renderBudgetCard(
 
   const metaDiv = activeDocument.createElement("div");
   metaDiv.className = "cashlog-budget-meta";
-  metaDiv.textContent = `¥${budget.amount.toLocaleString()} / ${periodLabels[budget.period] || budget.period}`;
+  metaDiv.textContent = `${formatMoney(budget.amount)} / ${periodLabels[budget.period] || budget.period}`;
   info.appendChild(metaDiv);
 
   if (budget.tag) {
@@ -1351,7 +1395,7 @@ function renderGoalCard(
 
   const metaDiv = activeDocument.createElement("div");
   metaDiv.className = "cashlog-goal-meta";
-  metaDiv.textContent = `¥${goal.targetAmount.toLocaleString()} / ${periodLabels[goal.period] || goal.period}`;
+  metaDiv.textContent = `${formatMoney(goal.targetAmount)} / ${periodLabels[goal.period] || goal.period}`;
   info.appendChild(metaDiv);
 
   if (goal.tag) {
