@@ -76,7 +76,14 @@ function renderEntry(
 ): void {
   const tag = listStyle === "none" ? "div" : "li";
   const li = list.createEl(tag, { cls: "cashlog-entry" });
-  const amountText = (value: number): string => (hideAmounts ? "***" : String(value));
+  // hide amount 指令与面板隐私开关都作用于金额；show account 覆盖 hide account
+  const maskAmount = hideAmounts || query.shouldHideAmount;
+  const maskAccount = query.shouldHideAccount && !query.shouldShowAccount;
+  const amountText = (value: number): string => (maskAmount ? "***" : String(value));
+  // 账户文本：hide account 只把账户名替换为占位符、金额照常显示；
+  // hide amount 保留账户名、只把金额打码
+  const accountText = (account: string, amount: number): string =>
+    maskAccount ? `💳***💴${amountText(amount)}` : `💳${account}💴${amountText(amount)}`;
 
   // 标签
   if (!query.shouldHideTag && entry.tags.length > 0) {
@@ -100,7 +107,7 @@ function renderEntry(
     for (const aa of entry.accountAmounts) {
       li.createSpan({
         cls: `cashlog-account ${aa.amount < 0 ? "cashlog-transfer-from" : "cashlog-transfer-to"}`,
-        text: `💳${aa.account}💴${amountText(aa.amount)}`,
+        text: accountText(aa.account, aa.amount),
       });
     }
   } else {
@@ -120,7 +127,7 @@ function renderEntry(
     for (const aa of entry.accountAmounts) {
       li.createSpan({
         cls: "cashlog-account",
-        text: `💳${aa.account}💴${amountText(aa.amount)}`,
+        text: accountText(aa.account, aa.amount),
       });
     }
   }

@@ -115,6 +115,8 @@
 /* 错误提示 */
 .cashlog-error {
   color: #e74c3c;
+  /* 多条指令错误按行展示（getError 用 \n 连接） */
+  white-space: pre-line;
   background: rgba(231, 76, 60, 0.1);
   border-radius: 4px;
   padding: 8px 12px;

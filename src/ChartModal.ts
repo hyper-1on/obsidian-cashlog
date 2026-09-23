@@ -721,7 +721,8 @@ export class ChartModal extends Modal {
               col.field === "amount" ? t("chartModal.field.amount") :
               col.field === "account" ? t("chartModal.field.account") :
               col.field === "attachment" ? t("chartModal.field.attachment") :
-              col.field === "description" ? t("chartModal.field.description") : t("chartModal.field.link")
+              col.field === "description" ? t("chartModal.field.description") :
+              col.field === "type" ? t("chartModal.field.type") : t("chartModal.field.link")
             )
             .setValue(col.header)
             .onChange((v) => { this.tableCols[i].header = v; }),

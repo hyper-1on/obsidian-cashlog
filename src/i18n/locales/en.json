@@ -182,6 +182,7 @@
   "chartModal.field.description": "Description",
   "chartModal.field.attachment": "Attachment",
   "chartModal.field.link": "Link",
+  "chartModal.field.type": "Type",
   "chartModal.chartTitle": "Chart title",
   "chartModal.chartTitleDesc": "Leave empty to hide title",
   "chartModal.chartTitlePlaceholder": "e.g., Monthly income vs expenses",

@@ -182,6 +182,7 @@
   "chartModal.field.description": "描述",
   "chartModal.field.attachment": "附件",
   "chartModal.field.link": "链接",
+  "chartModal.field.type": "类型",
   "chartModal.chartTitle": "图表标题",
   "chartModal.chartTitleDesc": "留空则不显示标题",
   "chartModal.chartTitlePlaceholder": "例如：月度收支对比",

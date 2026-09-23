@@ -74,7 +74,8 @@ export function parseTableDirective(line: string): TableDirective | null {
     return { kind: "columns", colCount: count };
   }
 
-  const colMatch = line.match(/^col(\d+)\s+(\w+)(?:\s+"([^"]*)")?(?:\s+(left|center|right))?$/i);
+  // 表头允许 \" 转义：写入侧 ChartModal.escapeQuotes 正是把 " 转成 \" 后写出的
+  const colMatch = line.match(/^col(\d+)\s+(\w+)(?:\s+"((?:[^"\\]|\\.)*)")?(?:\s+(left|center|right))?$/i);
   if (colMatch) {
     const colNumber = parseInt(colMatch[1], 10);
     if (!Number.isFinite(colNumber) || colNumber < 1 || colNumber > MAX_TABLE_COLS) {
@@ -97,7 +98,8 @@ export function parseTableDirective(line: string): TableDirective | null {
       kind: "col",
       colIndex: colNumber - 1,
       field: field as TableColConfig["field"],
-      header: colMatch[3],
+      // 还原写入侧写出的 \" 转义
+      header: colMatch[3] !== undefined ? colMatch[3].replace(/\\"/g, '"') : undefined,
       align: colMatch[4] as TableColConfig["align"] | undefined,
     };
   }
@@ -231,10 +233,10 @@ export function parseChartConfig(source: string): ChartConfig {
       continue;
     }
 
-    // chart title
-    const titleMatch = line.match(/^chart\s+title\s+"([^"]*)"/i);
+    // chart title（与 parseLine 保持同一套规则：支持 \" 转义）
+    const titleMatch = line.match(/^chart\s+title\s+"((?:[^"\\]|\\.)*)"/i);
     if (titleMatch) {
-      config.title = titleMatch[1];
+      config.title = titleMatch[1].replace(/\\"/g, '"');
       continue;
     }
 
@@ -336,7 +338,8 @@ export class Query {
   private showTagInDescription: boolean = false;
   private showChartSummary: boolean = false;
   private showGroupSubtotal: boolean = false;
-  private error: string | null = null;
+  // 指令错误累积：写错多处时应把每一条都报出来，而不是只留最后一条
+  private errors: string[] = [];
   private settings: CashlogSettings;
 
   // 表格选项
@@ -370,7 +373,7 @@ export class Query {
   }
 
   getError(): string | null {
-    return this.error;
+    return this.errors.length > 0 ? this.errors.join("\n") : null;
   }
 
   // 解析查询指令
@@ -383,7 +386,7 @@ export class Query {
     if (tableDirective) {
       const directiveError = applyTableDirective(this.chartTableConfig, tableDirective);
       if (directiveError) {
-        this.error = directiveError;
+        this.errors.push(directiveError);
       }
       return;
     }
@@ -494,10 +497,10 @@ export class Query {
       return;
     }
 
-    // chart title
-    const chartTitleMatch = line.match(/^chart\s+title\s+"([^"]*)"/i);
+    // chart title（标题允许 \" 转义：写入侧 ChartModal.escapeQuotes 正是这样转义的）
+    const chartTitleMatch = line.match(/^chart\s+title\s+"((?:[^"\\]|\\.)*)"/i);
     if (chartTitleMatch) {
-      this._chartTitle = chartTitleMatch[1];
+      this._chartTitle = chartTitleMatch[1].replace(/\\"/g, '"');
       return;
     }
 
@@ -566,13 +569,13 @@ export class Query {
       if (result.filter) {
         this.filters.push(result.filter);
       } else if (result.error) {
-        this.error = result.error;
+        this.errors.push(result.error);
       }
       return;
     }
 
     // 未知指令
-    this.error = tp("error.unknownDirective", { line });
+    this.errors.push(tp("error.unknownDirective", { line }));
   }
 
   // 执行查询
