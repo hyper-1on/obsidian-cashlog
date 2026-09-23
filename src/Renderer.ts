@@ -76,14 +76,17 @@ function renderEntry(
 ): void {
   const tag = listStyle === "none" ? "div" : "li";
   const li = list.createEl(tag, { cls: "cashlog-entry" });
-  // hide amount 指令与面板隐私开关都作用于金额；show account 覆盖 hide account
-  const maskAmount = hideAmounts || query.shouldHideAmount;
-  const maskAccount = query.shouldHideAccount && !query.shouldShowAccount;
-  const amountText = (value: number): string => (maskAmount ? "***" : String(value));
-  // 账户文本：hide account 只把账户名替换为占位符、金额照常显示；
-  // hide amount 保留账户名、只把金额打码
-  const accountText = (account: string, amount: number): string =>
-    maskAccount ? `💳***💴${amountText(amount)}` : `💳${account}💴${amountText(amount)}`;
+  // hide account 隐藏账户名、hide amount 隐藏金额、show account 覆盖 hide account。
+  // 两个指令都是「省略被隐藏的那部分、不留占位符」；返回空串表示该账户项已无内容可显示。
+  const hideAccountName = query.shouldHideAccount && !query.shouldShowAccount;
+  const hideAmountPart = query.shouldHideAmount;
+  // 面板隐私开关是独立控件：它把金额打码为 ***，而不是省略
+  const amountText = (value: number): string => (hideAmounts ? "***" : String(value));
+  const accountText = (account: string, amount: number): string => {
+    const accountPart = hideAccountName ? "" : `💳${account}`;
+    const amountPart = hideAmountPart ? "" : `💴${amountText(amount)}`;
+    return `${accountPart}${amountPart}`;
+  };
 
   // 标签
   if (!query.shouldHideTag && entry.tags.length > 0) {
@@ -105,14 +108,16 @@ function renderEntry(
   // 转账和余额变更特殊显示
   if (entry.isTransfer || entry.isBalanceChange) {
     for (const aa of entry.accountAmounts) {
+      const text = accountText(aa.account, aa.amount);
+      if (!text) continue;
       li.createSpan({
         cls: `cashlog-account ${aa.amount < 0 ? "cashlog-transfer-from" : "cashlog-transfer-to"}`,
-        text: accountText(aa.account, aa.amount),
+        text,
       });
     }
   } else {
     // 金额（无账户部分）
-    if (!query.shouldHideAmount) {
+    if (!hideAmountPart) {
       const noAcct = entry.noAccountAmount;
       if (noAcct !== 0) {
         const amountClass = entry.isExpense ? "cashlog-amount-expense" : "cashlog-amount-income";
@@ -125,10 +130,9 @@ function renderEntry(
 
     // 账户
     for (const aa of entry.accountAmounts) {
-      li.createSpan({
-        cls: "cashlog-account",
-        text: accountText(aa.account, aa.amount),
-      });
+      const text = accountText(aa.account, aa.amount);
+      if (!text) continue;
+      li.createSpan({ cls: "cashlog-account", text });
     }
   }
 
