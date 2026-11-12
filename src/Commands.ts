@@ -15,7 +15,7 @@ import { moment } from "./types";
 export function addCommands(plugin: CashlogPlugin): void {
   plugin.addCommand({
     id: "create-or-edit",
-    name: "Create or edit",
+    name: t("commands.createOrEdit"),
     icon: "yen-sign",
     editorCheckCallback: (checking, editor, view) => {
       return createOrEdit(checking, editor, view, plugin);

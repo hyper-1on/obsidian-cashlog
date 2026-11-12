@@ -130,46 +130,4 @@ export function openTagEditModal(
   finishModal(overlay, container, input);
 }
 
-// ========== 高级 Modal 函数 ==========
-
-type ModalRefreshFn = () => void;
-
-export function closeModalAndRefresh(overlay: HTMLElement, refreshPanel?: ModalRefreshFn): void {
-  overlay.remove();
-  if (refreshPanel) {
-    refreshPanel();
-  }
-}
-
-// 带回调的确认按钮创建器
-export function createAsyncModalButton(
-  text: string,
-  type: "primary" | "secondary",
-  onClick: (btn: HTMLButtonElement) => Promise<void>,
-  onSuccess?: ModalRefreshFn
-): HTMLButtonElement {
-  const btn = activeDocument.createElement("button");
-  btn.className = "cashlog-settings-btn";
-  if (type === "primary") {
-    btn.classList.add("cashlog-settings-btn-primary");
-  } else {
-    btn.classList.add("cashlog-settings-btn-secondary");
-  }
-  btn.textContent = text;
-  btn.addEventListener("click", () => {
-    void (async () => {
-      btn.disabled = true;
-      btn.textContent = t("modal.button.processing");
-      try {
-        await onClick(btn);
-        if (onSuccess) onSuccess();
-      } catch (e) {
-        new Notice(tp("notice.operationFailed", { message: getErrorMessage(e) }));
-        btn.disabled = false;
-        btn.textContent = text;
-      }
-    })();
-  });
-  return btn;
-}
 /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- 结束 Obsidian API 和 Chart.js 类型安全规则禁用 */

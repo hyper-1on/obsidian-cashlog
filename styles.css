@@ -1584,6 +1584,40 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
+/* 子页面头部：返回按钮 + 金额隐藏开关 */
+.cashlog-subpage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.cashlog-subpage-header .cashlog-back-btn {
+  margin-bottom: 0;
+}
+
+.cashlog-subpage-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cashlog-subpage-toggle:hover {
+  color: var(--interactive-accent);
+  background: var(--background-secondary);
+  border-color: var(--interactive-accent);
+}
+
 /* 子页面标题 */
 .cashlog-subpage-title {
   font-size: 1.15em;

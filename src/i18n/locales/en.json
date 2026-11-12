@@ -1,4 +1,5 @@
 {
+  "commands.createOrEdit": "Create or edit",
   "commands.insertChart": "Insert chart",
   "commands.openPanel": "Open Cashlog panel",
 

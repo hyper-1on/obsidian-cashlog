@@ -1,15 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import type CashlogPlugin from "./main";
-import { renderDashboard, DashboardCallbacks } from "./DashboardRenderer";
+import { renderDashboard, hideTooltip, DashboardCallbacks } from "./DashboardRenderer";
 import { renderPanelSettings, setPanelHideAmounts } from "./PanelSettings";
 import { renderQueryResult } from "./Renderer";
-import { Query } from "./Query/Query";
+import { Query, PANEL_PIE_COLORS } from "./Query/Query";
 import { QueryResult, EntryGroup } from "./Query/Filter";
 import { CashlogEntry } from "./EntryLocation";
 import {
   transformToChartData,
   renderPieChart,
+  clearLabelColorCache,
 } from "./ChartRenderer";
 import type { ChartDataResult } from "./ChartRenderer";
 import type { ChartConfig } from "./Query/Query";
@@ -80,6 +81,10 @@ export class CashlogView extends ItemView {
 
   async onClose(): Promise<void> {
     this.destroyPieChart();
+    // tooltip 挂在 document.body 上，视图关闭时必须显式清理，否则会悬挂在页面上
+    hideTooltip();
+    // 面板关闭期间主题可能变化，丢弃缓存的标签颜色
+    clearLabelColorCache();
   }
 
   // 饼图实例必须显式销毁：清空容器只会移除 canvas，
@@ -89,9 +94,12 @@ export class CashlogView extends ItemView {
     this.pieChart = null;
   }
 
-  // 统一的内容重建入口：先销毁图表，再清空容器
+  // 统一的内容重建入口：先销毁图表、清理 body 上的 tooltip，再清空容器
   private clearPanelContent(): void {
     this.destroyPieChart();
+    // 重建时 tooltip 的触发元素会被 empty() 移除，此后 mouseleave 不再触发；
+    // 若不显式清理，tooltip 会一直悬挂在页面上直到下次触发
+    hideTooltip();
     this.panelContentEl.empty();
   }
 
@@ -134,14 +142,18 @@ export class CashlogView extends ItemView {
 
   private toggleHideAmounts(): void {
     this.hideAmounts = !this.hideAmounts;
-    if (this.activeTab === "dashboard" && !this.subPage) {
-      this.clearPanelContent();
-      const callbacks: DashboardCallbacks = {
-        showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
-        showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
-      };
-      renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
+    if (this.activeTab !== "dashboard") return;
+    if (this.subPage) {
+      // 子页面也提供切换按钮，切换后重渲染当前子页面即可
+      this.renderSubPage();
+      return;
     }
+    this.clearPanelContent();
+    const callbacks: DashboardCallbacks = {
+      showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
+      showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
+    };
+    renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
   }
 
   refresh(): void {
@@ -187,12 +199,22 @@ export class CashlogView extends ItemView {
   }
 
   // 渲染返回按钮
-  private renderBackButton(): void {
-    const backBtn = this.panelContentEl.createEl("button", {
-      cls: "cashlog-back-btn",
-    });
+  // 子页面头部：返回按钮 + 金额隐藏开关。
+  // 眼睛按钮原本只渲染在主页面的统计周期标签里（DashboardRenderer.renderPeriodLabel），
+  // 子页面走的是另一条渲染链，因此需要在这里单独提供，否则子页面无法切换明/隐金额。
+  private renderSubPageHeader(): void {
+    const header = this.panelContentEl.createDiv({ cls: "cashlog-subpage-header" });
+
+    const backBtn = header.createEl("button", { cls: "cashlog-back-btn" });
     backBtn.textContent = t("view.backToDashboard");
     backBtn.addEventListener("click", () => this.goBack());
+
+    const toggle = header.createEl("button", { cls: "cashlog-subpage-toggle" });
+    setIcon(toggle, this.hideAmounts ? "eye-off" : "eye");
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleHideAmounts();
+    });
   }
 
   // 渲染子页面内容
@@ -200,7 +222,7 @@ export class CashlogView extends ItemView {
     if (!this.subPage) return;
 
     this.clearPanelContent();
-    this.renderBackButton();
+    this.renderSubPageHeader();
 
     // 子页面标题
     this.panelContentEl.createDiv({
@@ -376,13 +398,8 @@ export class CashlogView extends ItemView {
       summary: { totalIncome: 0, totalExpense: 0, balance: 0, count: expenseEntries.length },
     };
 
-    // 饼图默认颜色
-    const defaultColors = [
-      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
-      "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
-      "#14b8a6", "#e11d48", "#a855f7", "#eab308", "#0ea5e9",
-      "#d946ef", "#22c55e", "#fb923c", "#64748b", "#7c3aed",
-    ];
+    // 饼图调色板（与图表共用定义，见 Query.ts 的 PANEL_PIE_COLORS）
+    const defaultColors = PANEL_PIE_COLORS;
 
     const chartData: ChartDataResult = transformToChartData(
       result,

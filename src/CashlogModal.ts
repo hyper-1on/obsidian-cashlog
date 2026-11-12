@@ -662,10 +662,23 @@ export class CashlogModal extends Modal {
     });
   }
 
+  // 重排附件的显示名。
+  // 只重排「自动生成的编号名」，用户自定义的显示名必须保留 ——
+  // 旧实现每次增删都把显示名覆写为「附件N」，自定义名会被无条件丢弃。
   private renumberAttachments(): void {
-    for (let i = 0; i < this.data.attachments.length; i++) {
-      const [fileName] = this.data.attachments[i].split("|");
-      this.data.attachments[i] = `${fileName}|${tp("attachment.numberedName", { n: i + 1 })}`;
+    const total = this.data.attachments.length;
+    const isAutoName = (name: string | undefined): boolean => {
+      if (!name) return true;
+      for (let n = 1; n <= total + 1; n++) {
+        if (name === tp("attachment.numberedName", { n })) return true;
+      }
+      return false;
+    };
+    for (let i = 0; i < total; i++) {
+      const [fileName, displayName] = this.data.attachments[i].split("|");
+      if (isAutoName(displayName)) {
+        this.data.attachments[i] = `${fileName}|${tp("attachment.numberedName", { n: i + 1 })}`;
+      }
     }
   }
 

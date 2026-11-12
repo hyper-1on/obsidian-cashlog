@@ -414,7 +414,10 @@ function showTooltip(anchor: HTMLElement, entry: CashlogEntry, _event: MouseEven
   tip.style.top = `${rect.top}px`;
 }
 
-function hideTooltip(): void {
+// 供面板在重建/关闭时清理悬挂的 tooltip。
+// tooltip 挂在 document.body 上，面板容器 empty() 清不到它；
+// 触发元素被移除后 mouseleave 也不会再触发，必须显式调用。
+export function hideTooltip(): void {
   if (_currentTooltip) {
     _currentTooltip.remove();
     _currentTooltip = null;

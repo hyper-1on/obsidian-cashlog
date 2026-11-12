@@ -150,9 +150,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
           text
             .setValue(this.plugin.settings.attachmentFolder)
             .setPlaceholder(t("settings.attachmentFolder.placeholder"))
-            .onChange(async (value) => {
+            .onChange((value) => {
               this.plugin.settings.attachmentFolder = normalizePath(value) || DEFAULT_SETTINGS.attachmentFolder;
-              await this.plugin.saveSettings();
+              // 输入过程中不逐字符写盘
+              this.plugin.saveSettingsDebounced();
             });
           inputEl = text.inputEl;
         });
@@ -183,6 +184,13 @@ export class CashlogSettingsTab extends PluginSettingTab {
           }),
       );
 
+    // 启用后显示预算列表与新增表单。
+    // renderBudgetList 早已实现（列表 + 删除 + 新增），但此前从未被调用，
+    // 导致原生设置页只能开关功能、无法管理具体预算。
+    if (this.plugin.settings.enableBudgets) {
+      this.renderBudgetList(containerEl);
+    }
+
     // ===== 目标设置 =====
     new Setting(containerEl).setName(t("settings.section.goals")).setHeading();
 
@@ -198,6 +206,11 @@ export class CashlogSettingsTab extends PluginSettingTab {
             this.display();
           }),
       );
+
+    // 同上：renderGoalList 此前同样是死代码
+    if (this.plugin.settings.enableGoals) {
+      this.renderGoalList(containerEl);
+    }
 
     // ===== 统计设置 =====
     new Setting(containerEl).setName(t("settings.section.stats")).setHeading();
@@ -227,10 +240,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
         .addText((text) =>
           text
             .setValue(String(this.plugin.settings.statsMonthStartDay))
-            .onChange(async (value) => {
+            .onChange((value) => {
               const day = parseInt(value) || 1;
               this.plugin.settings.statsMonthStartDay = Math.max(1, Math.min(28, day));
-              await this.plugin.saveSettings();
+              this.plugin.saveSettingsDebounced();
             }),
         );
     }
@@ -290,9 +303,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
         text
           .setPlaceholder(t("settings.globalQuery.placeholder"))
           .setValue(this.plugin.settings.globalQuery)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.globalQuery = value;
-            await this.plugin.saveSettings();
+            // 长文本输入：停顿后再写盘，避免每个字符都写 data.json
+            this.plugin.saveSettingsDebounced();
           }),
       );
 

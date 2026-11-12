@@ -13,6 +13,8 @@ export class Cache {
   private events: Events;
   private settings: CashlogSettings;
   private initialized = false;
+  // 同一次初始化的 Promise，供渲染方等待索引就绪
+  private initPromise: Promise<void> | null = null;
 
   constructor(vault: Vault, metadataCache: MetadataCache, events: Events, settings: CashlogSettings) {
     this.vault = vault;
@@ -31,11 +33,27 @@ export class Cache {
     return this.entries;
   }
 
-  // 初始化：索引整个 Vault
+  // 初始化：索引整个 Vault。
+  // 记录同一个 Promise，让渲染方可以等到索引就绪（修复首屏竞态）。
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    await this.reindex();
-    this.initialized = true;
+    this.initPromise ??= (async () => {
+      await this.reindex();
+      this.initialized = true;
+    })();
+    return this.initPromise;
+  }
+
+  // 索引是否已就绪
+  isReady(): boolean {
+    return this.initialized;
+  }
+
+  // 等待索引就绪：首屏渲染前调用，避免读到空缓存后闪一下「暂无数据」。
+  // 若初始化尚未开始（initPromise 为空），直接返回，由调用方按空缓存处理。
+  whenReady(): Promise<void> {
+    if (this.initialized) return Promise.resolve();
+    return this.initPromise ?? Promise.resolve();
   }
 
   // 重新索引整个 Vault

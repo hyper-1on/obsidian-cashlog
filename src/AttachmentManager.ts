@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { type App, type Vault } from "obsidian";
 import { moment } from "./types";
+import type { Moment } from "./types";
 import type { CashlogSettings } from "./Settings";
 import { t } from "./i18n";
 
@@ -14,8 +15,10 @@ export class AttachmentManager {
   // 生成附件文件名：毫秒时间戳 + 冲突序号。
   // 同一毫秒内多选上传（多次调用都落在同一毫秒）会生成相同时间戳，
   // 不做唯一化会导致 createBinary 因文件已存在而失败、附件丢失。
-  generateFileName(extension: string): string {
-    const base = `cashlog-${moment().format("YYYYMMDDHHmmssSSS")}`;
+  // now 可注入：测试需要稳定复现「同一毫秒内多次上传重名」的场景，
+  // 直接依赖真实时钟会跨毫秒，导致 base 不同而永远不触发冲突分支。
+  generateFileName(extension: string, now: Moment = moment()): string {
+    const base = `cashlog-${now.format("YYYYMMDDHHmmssSSS")}`;
     const folder = this.settings.attachmentFolder;
     let candidate = `${base}.${extension}`;
     let counter = 1;

@@ -30,6 +30,28 @@ function entryTypeLabel(entry: CashlogEntry): string {
 }
 
 // 渲染 cashlog-chart 代码块为动态 HTML 表格
+// 根据「显示控制」指令过滤表格列。
+// hide <field> 是减法语义，与 colN（决定候选列）不冲突：
+// colN 列出要显示哪些列，hide 再从中移除对应字段。
+// show account 可抵消 hide account（手册：「强制显示账户列」）。
+function resolveVisibleColumns(
+  config: ReturnType<typeof parseTableConfig>,
+  query: Query,
+): TableColConfig[] {
+  return config.cols.slice(0, config.colCount).filter((col) => {
+    switch (col.field) {
+      case "date":
+        return !query.shouldHideDate;
+      case "amount":
+        return !query.shouldHideAmount;
+      case "account":
+        return !(query.shouldHideAccount && !query.shouldShowAccount);
+      default:
+        return true;
+    }
+  });
+}
+
 export function renderChartTable(
   containerEl: HTMLElement,
   result: QueryResult,
@@ -38,6 +60,8 @@ export function renderChartTable(
   plugin?: CashlogPlugin,
 ): void {
   const config = tableConfig || createDefaultTableConfig();
+  // 显示控制指令在这里生效（此前表格完全不读这些开关，导致 hide/show 静默失效）
+  const visibleCols = resolveVisibleColumns(config, query);
 
   containerEl.empty();
   containerEl.addClass("cashlog-chart");
@@ -59,8 +83,7 @@ export function renderChartTable(
     // 表头
     const thead = table.createEl("thead");
     const headerRow = thead.createEl("tr");
-    const cols = config.cols.slice(0, config.colCount);
-    for (const col of cols) {
+    for (const col of visibleCols) {
       const th = headerRow.createEl("th");
       th.textContent = col.header || fieldLabel(col.field);
       th.style.textAlign = col.align;
@@ -69,12 +92,12 @@ export function renderChartTable(
     // 表体
     const tbody = table.createEl("tbody");
     for (const entry of group.entries) {
-      renderEntryRow(tbody, entry, query, config, group.key, plugin);
+      renderEntryRow(tbody, entry, query, group.key, plugin, visibleCols);
     }
 
-    // 分组小计
+    // 分组小计（colspan 跟随可见列数）
     if (result.groups.length > 1 && query.shouldShowGroupSubtotal) {
-      renderGroupSubtotalRow(tbody, group, config.colCount);
+      renderGroupSubtotalRow(tbody, group, visibleCols.length);
     }
   }
 
@@ -89,12 +112,11 @@ function renderEntryRow(
   tbody: HTMLElement,
   entry: CashlogEntry,
   query: Query,
-  config: ReturnType<typeof parseTableConfig>,
   groupKey: string,
-  plugin?: CashlogPlugin,
+  plugin: CashlogPlugin | undefined,
+  cols: TableColConfig[],
 ): void {
   const tr = tbody.createEl("tr");
-  const cols = config.cols.slice(0, config.colCount);
 
   for (const col of cols) {
     switch (col.field) {
@@ -102,7 +124,8 @@ function renderEntryRow(
         let timeText = "";
         if (entry.date) {
           timeText = entry.date.format("YYYY-MM-DD");
-          if (entry.time) {
+          // hide time：日期列只保留日期部分
+          if (entry.time && !query.shouldHideTime) {
             timeText += " " + entry.time;
           }
         }
@@ -128,7 +151,8 @@ function renderEntryRow(
       case "description": {
         const td = tr.createEl("td", { cls: "cashlog-chart-desc" });
         td.style.textAlign = col.align;
-        if (query.shouldShowTagInDescription && entry.tags.length > 0) {
+        // hide tag：即使开启了 show tag in description 也不渲染标签
+        if (!query.shouldHideTag && query.shouldShowTagInDescription && entry.tags.length > 0) {
           for (const tag of entry.tags) {
             td.createEl("a", {
               cls: "tag",
@@ -609,13 +633,12 @@ function pickEntryAmount(entry: CashlogEntry, splitBy: SplitBy, xGroupBy: GroupB
 // 计算单个子分组项在某个 X 组内的原始值（带符号）
 function computeBarValue(entries: CashlogEntry[], splitBy: SplitBy, item: string, groupKey: string, xGroupBy: GroupByField): number {
   switch (splitBy) {
-    case "none": {
-      const inc = entries.filter((e) => e.isIncome && !e.isTransfer && !e.isBalanceChange)
-        .reduce((s, e) => s + e.amount, 0);
-      const exp = entries.filter((e) => e.isExpense && !e.isTransfer && !e.isBalanceChange)
-        .reduce((s, e) => s + e.amount, 0);
-      return inc + exp;
-    }
+    case "none":
+      // 与 valueType 分支保持一致：按账户分组时必须取该账户的金额，
+      // 否则每根柱都会显示整条金额（多账户条目会被重复计入）。
+      return entries
+        .filter((e) => !e.isTransfer && !e.isBalanceChange)
+        .reduce((s, e) => s + pickEntryAmount(e, splitBy, xGroupBy, item, groupKey), 0);
     case "valueType": {
       switch (item) {
         case "income":
@@ -1002,7 +1025,8 @@ export class CashlogChartRenderChild extends MarkdownRenderChild {
   }
 
   onload() {
-    this.render();
+    // 同样等索引就绪再首次渲染（与 CashlogRenderChild 一致，修复首屏竞态）
+    void this.plugin.cache.whenReady().then(() => this.render());
     this.registerEvent(
       this.plugin.events.on("cashlog-render-refresh", () => {
         this.render();

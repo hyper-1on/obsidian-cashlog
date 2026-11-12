@@ -21,6 +21,10 @@ export default class CashlogPlugin extends Plugin {
   attachmentManager!: AttachmentManager;
   accountManager!: AccountManager;
   budgetManager!: BudgetManager;
+  // 渲染刷新防抖定时器
+  private refreshTimer: number | null = null;
+  // 设置保存防抖定时器
+  private saveTimer: number | null = null;
 
   async onload() {
     initI18n();
@@ -59,10 +63,9 @@ export default class CashlogPlugin extends Plugin {
       });
     });
 
-    // 监听缓存更新事件，触发重渲染
-    this.events.on("cashlog-cache-update", () => {
-      this.events.trigger("cashlog-render-refresh");
-    });
+    // 监听缓存更新事件，触发重渲染（带防抖：一次编辑可能触发多次 cache 更新，
+    // 每次都全量重建代码块与图表实例会造成明显卡顿）
+    this.events.on("cashlog-cache-update", () => this.scheduleRenderRefresh());
 
     // 监听文件变更以更新缓存
     this.app.workspace.onLayoutReady(async () => {
@@ -100,6 +103,27 @@ export default class CashlogPlugin extends Plugin {
         }),
       );
     });
+  }
+
+  // 合并短时间内的多次缓存更新，只触发一次重渲染：
+  // 一次编辑可能引发多份文件写入，逐次全量重建代码块与图表实例会明显卡顿。
+  private scheduleRenderRefresh(): void {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      this.events.trigger("cashlog-render-refresh");
+    }, 150);
+  }
+
+  // 文本输入框专用：连续输入时只在停顿后写一次磁盘。
+  // 直接 saveSettings() 会在每个字符上写 data.json，
+  // 全局查询、附件目录这类长文本尤其明显。
+  saveSettingsDebounced(delay = 300): void {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      this.saveTimer = null;
+      void this.saveSettings();
+    }, delay);
   }
 
   async loadSettings() {
@@ -304,7 +328,9 @@ class CashlogRenderChild extends MarkdownRenderChild {
   }
 
   onload() {
-    this.render();
+    // 等索引就绪再首次渲染，避免首屏读到空缓存而短暂显示「暂无数据」。
+    // 索引完成后会触发 cache-update → render-refresh，届时还会再刷新一次。
+    void this.plugin.cache.whenReady().then(() => this.render());
     this.registerEvent(
       this.plugin.events.on("cashlog-render-refresh", () => {
         this.render();

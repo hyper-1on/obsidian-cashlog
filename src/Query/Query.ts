@@ -37,6 +37,21 @@ export function createDefaultTableConfig(): TableConfig {
 // 表格列数上限
 export const MAX_TABLE_COLS = 6;
 
+// 图表 / 面板共用调色板。
+// 分两个常量是因为：图表默认用 10 色、面板饼图用满 20 色，且两者历史顺序不同
+// （此处保持各自原有顺序以免配色变化），但定义集中于此，避免各处复制导致漂移。
+export const CHART_COLORS = [
+  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
+];
+
+export const PANEL_PIE_COLORS = [
+  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
+  "#14b8a6", "#e11d48", "#a855f7", "#eab308", "#0ea5e9",
+  "#d946ef", "#22c55e", "#fb923c", "#64748b", "#7c3aed",
+];
+
 // colN 可用的列字段
 export const TABLE_COL_FIELDS: TableColConfig["field"][] = [
   "date",
@@ -187,10 +202,7 @@ export function createDefaultChartConfig(): ChartConfig {
     height: 400,
     showLegend: true,
     showLabels: false,
-    colors: [
-      "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-      "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
-    ],
+    colors: [...CHART_COLORS],
   };
 }
 
@@ -352,10 +364,7 @@ export class Query {
   private _chartHeight: number = 400;
   private _chartShowLegend: boolean = true;
   private _chartShowLabels: boolean = false;
-  private _chartColors: string[] = [
-    "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-    "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
-  ];
+  private _chartColors: string[] = [...CHART_COLORS];
   // 子分组（条形图/折线图通用）
   private _chartSplitBy: SplitBy | null = null;
   private _chartSplitItems: string[] = [];

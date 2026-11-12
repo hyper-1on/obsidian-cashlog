@@ -100,24 +100,67 @@ export class BudgetManager {
         budget.period, statsWeekStartDay, statsMonthStartDay,
         budget.startDate, budget.endDate,
       );
+      // rollover：把上一周期未用完的额度加到本期额度上
+      const rolledOver = budget.rollover
+        ? this.computeRollover(entries, budget, statsWeekStartDay, statsMonthStartDay)
+        : 0;
+      const effectiveAmount = round2(budget.amount + rolledOver);
       const matchingEntries = this.filterByBudget(
         entries, budget, range?.start ?? null, range?.end ?? null,
       );
       const spent = round2(Math.abs(
         matchingEntries.reduce((sum, e) => sum + (e.amount < 0 ? e.amount : 0), 0),
       ));
-      const remaining = round2(budget.amount - spent);
-      const percentage = budget.amount > 0 ? Math.min(100, (spent / budget.amount) * 100) : 0;
+      const remaining = round2(effectiveAmount - spent);
+      const percentage = effectiveAmount > 0 ? Math.min(100, (spent / effectiveAmount) * 100) : 0;
 
       return {
         config: budget,
         spent,
         remaining: Math.max(0, remaining),
         percentage,
-        isOverspent: spent > budget.amount,
+        isOverspent: spent > effectiveAmount,
         matchingEntries,
       };
     });
+  }
+
+  // 计算上一周期未用完的额度（预算滚存）。
+  // 只有 weekly/monthly/yearly 有固定周期；day/custom/all 无法定义「上一周期」，返回 0。
+  // 上期超支时不下滚（按 0 处理），避免负额度继续拉低本期额度。
+  private computeRollover(
+    entries: CashlogEntry[],
+    budget: BudgetConfig,
+    statsWeekStartDay: number,
+    statsMonthStartDay: number,
+  ): number {
+    const thisRange = computePeriodRange(
+      budget.period, statsWeekStartDay, statsMonthStartDay,
+      budget.startDate, budget.endDate,
+    );
+    if (!thisRange) return 0;
+
+    const thisStart = thisRange.start.clone();
+    let prevStart: Moment;
+    switch (budget.period) {
+      case "weekly":
+        prevStart = thisStart.clone().subtract(1, "week");
+        break;
+      case "monthly":
+        prevStart = thisStart.clone().subtract(1, "month");
+        break;
+      case "yearly":
+        prevStart = thisStart.clone().subtract(1, "year");
+        break;
+      default:
+        return 0;
+    }
+    const prevEnd = thisStart.clone().subtract(1, "day").endOf("day");
+    const prevEntries = this.filterByBudget(entries, budget, prevStart, prevEnd);
+    const prevSpent = Math.abs(
+      prevEntries.reduce((sum, e) => sum + (e.amount < 0 ? e.amount : 0), 0),
+    );
+    return Math.max(0, round2(budget.amount - prevSpent));
   }
 
   // 获取所有目标的进度
