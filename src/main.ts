@@ -361,28 +361,30 @@ export default class CashlogPlugin extends Plugin {
 // 用 any 访问，拿不到就返回 null、由调用方回退到一级菜单 —— 宁可退化也不报错。
 // 内置项标题随界面语言变化，这里覆盖常见几种；匹配不到只是回退，不会影响其他功能。
 function findBuiltinInsertMenu(menu: Menu): Menu | null {
-  const items = (
-    menu as unknown as { items?: Array<{ submenu?: Menu }> }
-  ).items;
-  if (!Array.isArray(items)) return null;
+  const raw = menu as unknown as { items?: unknown };
+  const items = Array.isArray(raw.items) ? (raw.items as unknown[]) : null;
 
-  // 诊断输出保留：确认子菜单内容，便于以后版本变化时快速定位。
+  // 诊断：输出每一项的字段名。
+  // 实测 MenuItem.title 为 undefined，且 27 项里只有 1 项带 submenu，
+  // 而界面上有「文本格式 / 段落格式 / 插入」三个可展开项 —— 说明另外两个的
+  // 子菜单不挂在 submenu 字段上。这里先把每项的字段名打出来，确认后再改匹配逻辑。
   try {
-    const subs = items.filter((it) => it.submenu);
-    const first = subs[0]?.submenu as unknown as { items?: unknown[] } | undefined;
-    console.log(
-      "[cashlog] 子菜单数量:", subs.length,
-      "| 首个子菜单的子项数:", Array.isArray(first?.items) ? first.items.length : "N/A",
-    );
+    if (!items) {
+      console.log("[cashlog] menu.items 不是数组:", typeof raw.items);
+    } else {
+      const lines = items.map((it, i) => {
+        const keys =
+          it && typeof it === "object" ? Object.keys(it as Record<string, unknown>) : [];
+        return `${i}: ${keys.join("|")}`;
+      });
+      console.log("[cashlog] menu items keys:\n" + lines.join("\n"));
+    }
   } catch (err) {
-    console.log("[cashlog] 子菜单诊断失败:", err);
+    console.log("[cashlog] 菜单诊断失败:", err);
   }
 
-  // MenuItem.title 在运行时是 undefined（标题不存放在公开字段里，实测如此），
-  // 因此不能按标题匹配。当前编辑器右键菜单只有一个子菜单项，即 Obsidian 内置的
-  // 「插入」；出现多个子菜单时无法确定是哪一个，选择回退而不是猜。
-  const withSubmenu = items.filter((it) => it.submenu);
-  if (withSubmenu.length === 1) return withSubmenu[0].submenu ?? null;
+  // 在确认「插入」的真实字段之前不做猜测：回退到一级菜单，
+  // 避免把项挂进「文本格式」这种错误的子菜单里。
   return null;
 }
 
