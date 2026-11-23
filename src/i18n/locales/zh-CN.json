@@ -93,6 +93,10 @@
   "modal.modifyLabel": "修改{label}",
 
   "cashlogModal.title": "创建或编辑记账",
+  "cashlogModal.group.type": "类型",
+  "cashlogModal.group.detail": "明细",
+  "cashlogModal.group.attachment": "附件",
+  "cashlogModal.group.time": "时间",
   "cashlogModal.type": "类型",
   "cashlogModal.type.expense": "支出",
   "cashlogModal.type.income": "收入",
@@ -345,6 +349,7 @@
   "panelSettings.attachmentFolderPlaceholder": "输入目录路径，支持模糊搜索",
   "panelSettings.accountList": "账户列表",
   "panelSettings.accountInitialBalance": "账户初始余额",
+  "panelSettings.toggleBalanceVisibility": "显示/隐藏余额",
   "panelSettings.noBudget": "暂无预算，点击下方添加",
   "panelSettings.noGoal": "暂无目标，点击下方添加",
   "panelSettings.statsMode": "统计方式",

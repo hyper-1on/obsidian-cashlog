@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { openTagEditModal } from "./ModalHelpers";
 import { t, formatMoney } from "./i18n";
+import { createSection } from "./ui/Section";
 import { getErrorMessage } from "./ErrorUtils";
 
 let budgetIdCounter = 0;
@@ -26,9 +27,9 @@ export class CashlogSettingsTab extends PluginSettingTab {
     new Setting(containerEl).setName(t("settings.heading")).setHeading();
 
     // ===== 标签设置 =====
-    new Setting(containerEl).setName(t("settings.section.tags")).setHeading();
+    const sectionBody1 = createSection(containerEl, { title: t("settings.section.tags") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody1)
       .setName(t("settings.incomeTag.name"))
       .setDesc(t("settings.incomeTag.desc"))
       .addButton((btn) => {
@@ -46,7 +47,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
         btn.buttonEl.addClass("cashlog-settings-btn-tag");
       });
 
-    new Setting(containerEl)
+    new Setting(sectionBody1)
       .setName(t("settings.expenseTag.name"))
       .setDesc(t("settings.expenseTag.desc"))
       .addButton((btn) => {
@@ -65,7 +66,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       });
 
     if (this.plugin.settings.enableAccounts) {
-      new Setting(containerEl)
+      new Setting(sectionBody1)
         .setName(t("settings.transferTag.name"))
         .setDesc(t("settings.transferTag.desc"))
         .addButton((btn) => {
@@ -83,7 +84,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
           btn.buttonEl.addClass("cashlog-settings-btn-tag");
         });
 
-      new Setting(containerEl)
+      new Setting(sectionBody1)
         .setName(t("settings.balanceChangeTag.name"))
         .setDesc(t("settings.balanceChangeTag.desc"))
         .addButton((btn) => {
@@ -103,16 +104,16 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     // ===== 子标签预设 =====
-    new Setting(containerEl).setName(t("settings.section.subTagPresets")).setHeading();
+    const sectionBody2 = createSection(containerEl, { title: t("settings.section.subTagPresets") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody2)
       .setName(t("settings.section.subTagPresets"))
       .setDesc(t("settings.subTagPresets.desc"));
 
     // ===== 账户设置 =====
-    new Setting(containerEl).setName(t("settings.section.accounts")).setHeading();
+    const sectionBody3 = createSection(containerEl, { title: t("settings.section.accounts") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody3)
       .setName(t("settings.enableAccounts.name"))
       .setDesc(t("settings.enableAccounts.desc"))
       .addToggle((toggle) =>
@@ -126,9 +127,9 @@ export class CashlogSettingsTab extends PluginSettingTab {
       );
 
     // ===== 附件设置 =====
-    new Setting(containerEl).setName(t("settings.section.attachments")).setHeading();
+    const sectionBody4 = createSection(containerEl, { title: t("settings.section.attachments") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody4)
       .setName(t("settings.enableAttachments.name"))
       .setDesc(t("settings.enableAttachments.desc"))
       .addToggle((toggle) =>
@@ -143,7 +144,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
 
     if (this.plugin.settings.enableAttachments) {
       let inputEl: HTMLInputElement | null = null;
-      new Setting(containerEl)
+      new Setting(sectionBody4)
         .setName(t("settings.attachmentFolder.name"))
         .setDesc(t("settings.attachmentFolder.desc"))
         .addText((text) => {
@@ -169,9 +170,9 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     // ===== 预算设置 =====
-    new Setting(containerEl).setName(t("settings.section.budget")).setHeading();
+    const sectionBody5 = createSection(containerEl, { title: t("settings.section.budget") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody5)
       .setName(t("settings.enableBudgets.name"))
       .setDesc(t("settings.enableBudgets.desc"))
       .addToggle((toggle) =>
@@ -192,9 +193,9 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     // ===== 目标设置 =====
-    new Setting(containerEl).setName(t("settings.section.goals")).setHeading();
+    const sectionBody6 = createSection(containerEl, { title: t("settings.section.goals") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody6)
       .setName(t("settings.enableGoals.name"))
       .setDesc(t("settings.enableGoals.desc"))
       .addToggle((toggle) =>
@@ -213,9 +214,9 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     // ===== 统计设置 =====
-    new Setting(containerEl).setName(t("settings.section.stats")).setHeading();
+    const sectionBody7 = createSection(containerEl, { title: t("settings.section.stats") });
 
-    new Setting(containerEl)
+    new Setting(sectionBody7)
       .setName(t("settings.statsMode.name"))
       .setDesc(t("settings.statsMode.desc"))
       .addDropdown((dropdown) =>
@@ -234,7 +235,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.statsMode === "month") {
-      new Setting(containerEl)
+      new Setting(sectionBody7)
         .setName(t("settings.monthStartDay.name"))
         .setDesc(t("settings.monthStartDay.desc"))
         .addText((text) =>
@@ -249,7 +250,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     if (this.plugin.settings.statsMode === "week") {
-      new Setting(containerEl)
+      new Setting(sectionBody7)
         .setName(t("settings.weekStartDay.name"))
         .setDesc(t("settings.weekStartDay.desc"))
         .addDropdown((dropdown) =>
@@ -270,10 +271,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
     }
 
     // ===== 高级设置 =====
-    new Setting(containerEl).setName(t("settings.section.advanced")).setHeading();
+    const sectionBody8 = createSection(containerEl, { title: t("settings.section.advanced") });
 
     // 货币符号：留空则跟随当前语言（zh-CN → ¥，en → $）
-    new Setting(containerEl)
+    new Setting(sectionBody8)
       .setName(t("settings.currencySymbol.name"))
       .setDesc(t("settings.currencySymbol.desc"))
       .addText((text) =>
@@ -286,7 +287,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(sectionBody8)
       .setName(t("settings.showEditButton.name"))
       .setDesc(t("settings.showEditButton.desc"))
       .addToggle((toggle) =>
@@ -298,7 +299,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(sectionBody8)
       .setName(t("settings.showNoteLink.name"))
       .setDesc(t("settings.showNoteLink.desc"))
       .addToggle((toggle) =>
@@ -310,7 +311,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(sectionBody8)
       .setName(t("settings.globalQuery.name"))
       .setDesc(t("settings.globalQuery.desc"))
       .addTextArea((text) =>
@@ -325,10 +326,10 @@ export class CashlogSettingsTab extends PluginSettingTab {
       );
 
     // ===== 路径设置 =====
-    new Setting(containerEl).setName(t("settings.section.paths")).setHeading();
+    const sectionBody9 = createSection(containerEl, { title: t("settings.section.paths") });
 
     let excludeInput: HTMLTextAreaElement;
-    new Setting(containerEl)
+    new Setting(sectionBody9)
       .setName(t("settings.excludePaths.name"))
       .setDesc(t("settings.excludePaths.desc"))
       .addTextArea((text) => {
@@ -353,7 +354,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       );
 
     let includeInput: HTMLTextAreaElement;
-    new Setting(containerEl)
+    new Setting(sectionBody9)
       .setName(t("settings.includePaths.name"))
       .setDesc(t("settings.includePaths.desc"))
       .addTextArea((text) => {
@@ -378,7 +379,7 @@ export class CashlogSettingsTab extends PluginSettingTab {
       );
 
     // 重置按钮
-    new Setting(containerEl)
+    new Setting(sectionBody9)
       .setName(t("settings.reset.name"))
       .setDesc(t("settings.reset.desc"))
       .addButton((btn) =>

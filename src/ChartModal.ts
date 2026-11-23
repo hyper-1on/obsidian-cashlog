@@ -4,6 +4,7 @@ import type CashlogPlugin from "./main";
 import type { CashlogEntry } from "./CashlogEntry";
 import { MAX_TABLE_COLS, type TableColConfig } from "./Query/Query";
 import { t, tp } from "./i18n";
+import { createSection } from "./ui/Section";
 
 // 图表类型
 type ChartType = "table" | "bar" | "line" | "pie";
@@ -323,11 +324,10 @@ export class ChartModal extends Modal {
   }
 
   // 创建一个分组卡片：标题在外层，返回内部内容容器。
-  // 分组容器同时是未来重做 UI（如改成选项卡）时的 section 雏形。
+  // 分组容器：统一走 ui/Section，和面板设置 / dashboard 共用同一套卡片样式。
+  // 返回的是 body，调用方直接往里追加 Setting。
   private createGroup(container: HTMLElement, title: string): HTMLElement {
-    const group = container.createDiv({ cls: "cashlog-modal-group" });
-    group.createDiv({ cls: "cashlog-modal-group-title", text: title });
-    return group.createDiv({ cls: "cashlog-modal-group-body" });
+    return createSection(container, { title });
   }
 
   // 图表尺寸：预设下拉 + 宽高输入 + 按真实宽高比缩放的预览框

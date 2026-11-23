@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { Menu, Notice, normalizePath } from "obsidian";
+import { Menu, Notice, normalizePath, setIcon } from "obsidian";
 import { FolderSuggest } from "./FolderSuggest";
 import type CashlogPlugin from "./main";
 import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
@@ -27,16 +27,18 @@ import {
 // 设置页的渲染函数层级很深、重建入口有十几处，用模块级状态同步，
 // 避免把 hideAmounts 参数一路穿过所有闭包。
 let panelHideAmounts = false;
+// 宿主（CashlogView）注入的切换函数：设置页与 dashboard 共用同一个隐私状态
+let panelToggleHideAmounts: (() => void) | null = null;
 
-export function setPanelHideAmounts(hideAmounts: boolean): void {
+export function setPanelHideAmounts(hideAmounts: boolean, toggle?: () => void): void {
   panelHideAmounts = hideAmounts;
+  if (toggle) panelToggleHideAmounts = toggle;
 }
 
 export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugin): void {
   // 保存滚动位置：同时记录「相对比例」，因为重建后内容高度可能变化，
   // 只记绝对像素会在内容变短时被浏览器夹取到新的底部。
   const scrollTop = container.scrollTop;
-  const maxScrollBefore = container.scrollHeight - container.clientHeight;
 
   // 确保 container 有 createEl 方法（polyfill for 非 Obsidian 容器）
   if (typeof container.createEl !== "function") {
@@ -109,52 +111,76 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
   });
 
   // ========== 账户设置 ==========
-  renderSection(container, "accounts", "💳", t("panelSettings.sectionAccounts"), (content) => {
-    renderToggleRow(content, t("panelSettings.enableAccounts"), s.enableAccounts, async (v) => {
-      s.enableAccounts = v;
-      await plugin.saveSettingsAndReindex();
-      renderPanelSettings(container, plugin);
-    });
-
-    if (s.enableAccounts) {
+  renderSection(
+    container, "accounts", "💳", t("panelSettings.sectionAccounts"),
+    (content) => {
       // 账户 chip 列表
       renderAccountList(content, plugin);
 
       // 账户初始余额标题
-      const balanceTitle = activeDocument.createElement("div");
+      // 账户初始余额：标题 + 右侧眼睛（临时显示/隐藏所有余额）
+      const balanceHeader = activeDocument.createElement("div");
+      balanceHeader.className = "cashlog-settings-row cashlog-balance-header";
+      
+      const balanceTitle = activeDocument.createElement("span");
       balanceTitle.className = "cashlog-settings-label cashlog-balance-title";
       balanceTitle.textContent = t("panelSettings.accountInitialBalance");
-      content.appendChild(balanceTitle);
+      balanceHeader.appendChild(balanceTitle);
+      
+      const eyeBtn = activeDocument.createElement("button");
+      eyeBtn.className = "cashlog-balance-eye";
+      eyeBtn.setAttribute("aria-label", t("panelSettings.toggleBalanceVisibility"));
+      setIcon(eyeBtn, panelHideAmounts ? "eye-off" : "eye");
+      eyeBtn.addEventListener("click", () => {
+  // 与 dashboard 的眼睛共用同一个隐私状态；没有宿主回调时退化为只切换本页
+  if (panelToggleHideAmounts) {
+    panelToggleHideAmounts();
+    return;
+  }
+  setPanelHideAmounts(!panelHideAmounts);
+  renderPanelSettings(container, plugin);
+});
+      balanceHeader.appendChild(eyeBtn);
+      
+      content.appendChild(balanceHeader);
 
       // 每个账户的余额按钮
       for (const acct of s.accounts) {
         renderBalanceButton(content, acct, plugin);
       }
-    }
-  });
+    },
+    {
+      headerAction: (header) =>
+        renderHeaderToggle(header, s.enableAccounts, async (v) => {
+          s.enableAccounts = v;
+          await plugin.saveSettingsAndReindex();
+          renderPanelSettings(container, plugin);
+        }),
+      collapsed: !s.enableAccounts,
+    },
+  );
 
   // ========== 附件设置 ==========
-  renderSection(container, "attachments", "📎", t("panelSettings.sectionAttachments"), (content) => {
-    renderToggleRow(content, t("panelSettings.enableAttachments"), s.enableAttachments, async (v) => {
-      s.enableAttachments = v;
-      await plugin.saveSettings();
-      renderPanelSettings(container, plugin);
-    });
-
-    if (s.enableAttachments) {
+  renderSection(
+    container, "attachments", "📎", t("panelSettings.sectionAttachments"),
+    (content) => {
       renderAttachmentFolderRow(content, plugin);
-    }
-  });
+    },
+    {
+      headerAction: (header) =>
+        renderHeaderToggle(header, s.enableAttachments, async (v) => {
+          s.enableAttachments = v;
+          await plugin.saveSettings();
+          renderPanelSettings(container, plugin);
+        }),
+      collapsed: !s.enableAttachments,
+    },
+  );
 
   // ========== 预算设置 ==========
-  renderSection(container, "budget", "📊", t("panelSettings.sectionBudget"), (content) => {
-    renderToggleRow(content, t("panelSettings.enableBudgets"), s.enableBudgets, async (v) => {
-      s.enableBudgets = v;
-      await plugin.saveSettings();
-      renderPanelSettings(container, plugin);
-    });
-
-    if (s.enableBudgets) {
+  renderSection(
+    container, "budget", "📊", t("panelSettings.sectionBudget"),
+    (content) => {
       // 已有预算列表
       if (s.budgets.length > 0) {
         for (let i = 0; i < s.budgets.length; i++) {
@@ -174,18 +200,22 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
 
       // 新增预算表单
       renderAddBudgetForm(content, plugin);
-    }
-  });
+    },
+    {
+      headerAction: (header) =>
+        renderHeaderToggle(header, s.enableBudgets, async (v) => {
+          s.enableBudgets = v;
+          await plugin.saveSettings();
+          renderPanelSettings(container, plugin);
+        }),
+      collapsed: !s.enableBudgets,
+    },
+  );
 
   // ========== 目标设置 ==========
-  renderSection(container, "budget", "🎯", t("panelSettings.sectionGoals"), (content) => {
-    renderToggleRow(content, t("panelSettings.enableGoals"), s.enableGoals, async (v) => {
-      s.enableGoals = v;
-      await plugin.saveSettings();
-      renderPanelSettings(container, plugin);
-    });
-
-    if (s.enableGoals) {
+  renderSection(
+    container, "goals", "🎯", t("panelSettings.sectionGoals"),
+    (content) => {
       // 已有目标列表
       if (s.goals.length > 0) {
         for (let i = 0; i < s.goals.length; i++) {
@@ -205,8 +235,17 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
 
       // 新增目标表单
       renderAddGoalForm(content, plugin);
-    }
-  });
+    },
+    {
+      headerAction: (header) =>
+        renderHeaderToggle(header, s.enableGoals, async (v) => {
+          s.enableGoals = v;
+          await plugin.saveSettings();
+          renderPanelSettings(container, plugin);
+        }),
+      collapsed: !s.enableGoals,
+    },
+  );
 
   // ========== 统计设置 ==========
   renderSection(container, "stats", "📈", t("panelSettings.sectionStats"), (content) => {
@@ -281,14 +320,18 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
     });
   });
 
-  // 恢复滚动位置（按比例）。
+  // 恢复滚动位置：精确恢复 scrollTop，而不是按比例。
+  //
+  // 按比例的问题是：切换功能开关会让某个分区变短/变长，总高度随之变化，
+  // 于是被点的那个开关会轻微位移。而开关上方的布局其实没有变，精确恢复
+  // 才能让它停在原地。内容变短到超出底部时，浏览器会自然夹取。
+  //
   // 重建是同步的，DOM 此时已就位，所以先立刻恢复一次；
   // 再在后续两帧各校正一次 —— Obsidian 在首帧后仍可能再触发布局，
   // 只写一次会被那次布局覆盖，外部表现就是面板上下跳动。
-  const scrollRatio = maxScrollBefore > 0 ? scrollTop / maxScrollBefore : 0;
   const applyScroll = (): void => {
     const maxScrollAfter = container.scrollHeight - container.clientHeight;
-    container.scrollTop = maxScrollAfter > 0 ? scrollRatio * maxScrollAfter : 0;
+    container.scrollTop = Math.min(scrollTop, Math.max(0, maxScrollAfter));
   };
   applyScroll();
   window.requestAnimationFrame(() => {
@@ -299,12 +342,20 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
 
 // ========== 辅助函数 ==========
 
+interface SectionOptions {
+  /** 标题行右侧的操作区（如功能开关） */
+  headerAction?: (header: HTMLElement) => void;
+  /** 折叠：true 时不渲染内容块（功能关闭时不留空白卡片） */
+  collapsed?: boolean;
+}
+
 function renderSection(
   container: HTMLElement,
   type: string,
   icon: string,
   title: string,
-  renderContent: (content: HTMLElement) => void
+  renderContent: (content: HTMLElement) => void,
+  options: SectionOptions = {},
 ): void {
   // 使用原生 DOM API 避免 Obsidian 包装问题
   const section = activeDocument.createElement("div");
@@ -314,17 +365,48 @@ function renderSection(
   header.className = "cashlog-settings-header";
   header.createSpan({ text: icon });
   header.append(` ${title}`);
+
+  if (options.headerAction) {
+    // 占位把操作区推到最右侧
+    const spacer = activeDocument.createElement("span");
+    spacer.className = "cashlog-settings-header-spacer";
+    header.appendChild(spacer);
+    options.headerAction(header);
+  }
+
   section.appendChild(header);
+  container.appendChild(section);
+
+  // 功能关闭时不渲染内容块：避免留下一个空白卡片
+  if (options.collapsed) return;
 
   const content = activeDocument.createElement("div");
   content.className = "cashlog-settings-content";
   section.appendChild(content);
 
-  container.appendChild(section);
-
   // 内容必须绘制到 section 内部：此前调用方一律把内容加到外层 container，
   // 导致每个 section 只剩「标题 + 空的内容块」，内容散落在卡片外面。
   renderContent(content);
+}
+
+// 标题行右侧的功能开关：标签由分区标题承担，这里只渲染开关本体。
+// 关闭时整个分区内容不渲染（见 renderSection 的 collapsed）。
+function renderHeaderToggle(
+  header: HTMLElement,
+  value: boolean,
+  onChange: (v: boolean) => Promise<void>,
+): void {
+  const toggle = activeDocument.createElement("div");
+  toggle.className = "cashlog-settings-toggle" + (value ? " active" : "");
+  toggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    void (async () => {
+      const next = !value;
+      toggle.classList.toggle("active", next);
+      await onChange(next);
+    })();
+  });
+  header.appendChild(toggle);
 }
 
 function renderToggleRow(

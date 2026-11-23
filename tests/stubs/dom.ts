@@ -108,6 +108,15 @@ export class FakeElement {
   // 事件绑定在断言中不需要
   addEventListener(): void {}
 
+  // 属性读写：真实 DOM 有 setAttribute/getAttribute，桩里记录到 attrs
+  setAttribute(name: string, value: string): void {
+    this.attrs[name] = String(value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attrs[name] ?? null;
+  }
+
   // Obsidian 的 appendText：追加纯文本到元素末尾
   appendText(text: string): void {
     this.own.push(String(text));

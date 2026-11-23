@@ -1233,10 +1233,22 @@ test("[面板] 设置分区的内容应绘制在 section 内部，且不再渲�
   for (const sec of sections) {
     const title = collectText(sec).slice(0, 20);
     const content = sec.children.find((c) => c.cls.includes("cashlog-settings-content"));
-    assert.ok(content, `分区「${title}」缺少 content 容器`);
+    if (!content) {
+
+      // 功能关闭的分区只有标题行（开关在标题行上），不渲染内容块 —— 这是设计行为
+
+      assert.equal(sec.children.length, 1, `分区「${title}」没有 content 时只应有标题行`);
+
+      continue;
+
+    }
+
     assert.ok(
-      content!.children.length > 0,
+
+      content.children.length > 0,
+
       `分区「${title}」的 content 不应为空 —— 内容被错误地加到了 section 外部`,
+
     );
   }
 
@@ -1275,8 +1287,17 @@ function assertPanelStructure(container: FakeElement, label: string): void {
   for (const sec of sections) {
     const title = collectText(sec).slice(0, 20);
     const content = sec.children.find((c) => c.cls.includes("cashlog-settings-content"));
-    assert.ok(content, `${label}: 分区「${title}」缺少 content 容器`);
-    assert.ok(content!.children.length > 0, `${label}: 分区「${title}」内容为空（未绘制进 section）`);
+    if (!content) {
+
+      // 功能关闭的分区只有标题行（开关在标题行上），不渲染内容块 —— 这是设计行为
+
+      assert.equal(sec.children.length, 1, `${label}: 分区「${title}」没有 content 时只应有标题行`);
+
+      continue;
+
+    }
+
+    assert.ok(content.children.length > 0, `${label}: 分区「${title}」内容为空（未绘制进 section）`);
   }
   let dividers = 0;
   (function count(el: FakeElement): void {
@@ -1552,4 +1573,40 @@ test("[二级] tag includes 用一级名能命中二级条目", () => {
   const result = new Query("tag includes 餐饮", settings).apply(entries);
   const hit = result.groups.reduce((n, g) => n + g.entries.length, 0);
   assert.equal(hit, 1, "tag includes 餐饮 应命中 #支出/餐饮/午餐");
+});
+
+// ------------------------------------------- 静态检查：共享组件必须被 import
+
+test("[静态] 使用 createSection 的文件必须 import 它（踩过的坑：漏 import 导致弹窗空白）", () => {
+  assert.ok(SRC_DIR, "未能定位 src 目录");
+
+  // 自带递归：不依赖其它测试内部定义的 walk()
+  const listTs = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...listTs(full));
+      else if (entry.name.endsWith(".ts")) out.push(full);
+    }
+    return out;
+  };
+
+  const files = listTs(SRC_DIR!);
+  const offenders: string[] = [];
+
+  for (const file of files) {
+    // 定义文件自身不需要 import
+    if (file.replace(/\\/g, "/").endsWith("ui/Section.ts")) continue;
+    const src = readFileSync(file, "utf8");
+    if (!/\bcreateSection\s*\(/.test(src)) continue;
+    if (!/import\s*\{[^}]*\bcreateSection\b[^}]*\}\s*from\s*"\.\/ui\/Section"/.test(src)) {
+      offenders.push(file.replace(SRC_DIR!, "").replace(/\\/g, "/"));
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "以下文件使用了 createSection 却没有从 ./ui/Section import：" + offenders.join(", "),
+  );
 });

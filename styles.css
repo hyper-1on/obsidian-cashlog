@@ -478,11 +478,17 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
+  transition: color 0.2s;
+}
+
+/* 只有真正可点击的分区标题（如「分类排行」）才显示手型与悬停色，
+     其余标题不可点击，给 pointer 会误导用户去点。 */
+.cashlog-section-title-link {
   cursor: pointer;
   transition: color 0.2s;
 }
 
-.cashlog-section-title:hover {
+.cashlog-section-title-link:hover {
   color: var(--interactive-accent);
   border-bottom-color: var(--interactive-accent);
 }
@@ -844,49 +850,89 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
 }
 
 .cashlog-settings-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  font-weight: 600;
-  font-size: 1.05em;
-}
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 1.05em;
+    /* 抽屉把手：只向下投影到抽屉身上，形成接缝 */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
 
-.cashlog-settings-section.tags {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: white;
-}
+.cashlog-settings-section.tags,
+  .cashlog-settings-section.accounts,
+  .cashlog-settings-section.attachments,
+  .cashlog-settings-section.budget,
+  .cashlog-settings-section.goals,
+  .cashlog-settings-section.stats,
+  .cashlog-settings-section.advanced {
+    color: white;
+  }
 
-.cashlog-settings-section.accounts {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-}
+  .cashlog-settings-section.tags > .cashlog-settings-header {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  }
 
-.cashlog-settings-section.attachments {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-}
+  .cashlog-settings-section.accounts > .cashlog-settings-header {
+    background: linear-gradient(135deg, #10b981, #059669);
+  }
 
-.cashlog-settings-section.budget {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: white;
-}
+  .cashlog-settings-section.attachments > .cashlog-settings-header {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
 
-.cashlog-settings-section.stats {
-  background: linear-gradient(135deg, #06b6d4, #0891b2);
-  color: white;
-}
+  .cashlog-settings-section.budget > .cashlog-settings-header {
+    background: linear-gradient(135deg, #b82e00, #8b1e00);
+  }
 
-.cashlog-settings-section.advanced {
-  background: linear-gradient(135deg, #6b7280, #4b5563);
-  color: white;
-}
+  .cashlog-settings-section.goals > .cashlog-settings-header {
+    background: linear-gradient(135deg, #ec4899, #be185d);
+  }
+
+  .cashlog-settings-section.stats > .cashlog-settings-header {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+  }
+
+  .cashlog-settings-section.advanced > .cashlog-settings-header {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+  }
+
+  /* 深色主题：整体提亮一档。
+     深色背景上，原渐变的深端几乎与背景同色，标题会「沉」下去；
+     提亮后既保住对比，又不至于刺眼。 */
+  body.theme-dark .cashlog-settings-section.tags > .cashlog-settings-header {
+    background: linear-gradient(135deg, #60a5fa, #2563eb);
+  }
+  body.theme-dark .cashlog-settings-section.accounts > .cashlog-settings-header {
+    background: linear-gradient(135deg, #34d399, #059669);
+  }
+  body.theme-dark .cashlog-settings-section.attachments > .cashlog-settings-header {
+    background: linear-gradient(135deg, #fbbf24, #d97706);
+  }
+  body.theme-dark .cashlog-settings-section.budget > .cashlog-settings-header {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+  }
+  body.theme-dark .cashlog-settings-section.goals > .cashlog-settings-header {
+    background: linear-gradient(135deg, #f472b6, #db2777);
+  }
+  body.theme-dark .cashlog-settings-section.stats > .cashlog-settings-header {
+    background: linear-gradient(135deg, #22d3ee, #0891b2);
+  }
+  body.theme-dark .cashlog-settings-section.advanced > .cashlog-settings-header {
+    background: linear-gradient(135deg, #9ca3af, #4b5563);
+  }
 
 .cashlog-settings-content {
-  padding: 16px;
-  background: var(--background-secondary);
-  border-radius: 0 0 10px 10px;
-}
+    /* 贴满卡片宽度，与把手无缝；下沿自己带圆角 —— 若只靠 section 裁切，
+       圆角处抗锯齿会露出 section 底色，看起来像「两角露出母层弧线」。 */
+    padding: 14px 16px;
+    background: var(--background-secondary);
+    border-radius: 0 0 var(--cashlog-sect-radius) var(--cashlog-sect-radius);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
 
 .cashlog-settings-row {
   display: flex;
@@ -1470,7 +1516,6 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   width: 100%;
 }
 
-/* 图表弹窗 - 无左内边距的复选框列表 */
 .cashlog-checkbox-list-no-pad {
   padding-left: 0;
 }
@@ -1585,8 +1630,6 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   flex: 0 0 auto;
   width: 3.5em;
 }
-
-
 
 /* 列配置区容器：只承载列卡片，列数选择器在其上方 */
 .cashlog-col-configs {
@@ -1885,4 +1928,97 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
 .cashlog-settings-date-input {
   flex: 1;
   min-width: 0;
+}
+
+/* ==========================================================================
+   UI 统一：分区卡片（面板设置 / 弹窗 / dashboard 共用一套 token）
+   --------------------------------------------------------------------------
+   这三处原本各自定义卡片：间距 18/20、padding 有无、标题下划线 accent/border、
+   字号 1.02/0.9 各不相同。这里用同一组变量收口，新分区一律走 src/ui/Section.ts。
+
+   注意：本段只统一「视觉」属性；功能属性（cursor / display / overflow /
+   box-shadow）仍由各容器自己的规则提供，不受影响。
+   ========================================================================== */
+:root {
+  --cashlog-sect-gap: 18px;
+  --cashlog-sect-pad: 14px 16px;
+  --cashlog-sect-radius: 10px;
+  --cashlog-sect-border: 1px solid var(--background-modifier-border);
+  --cashlog-sect-bg: var(--background-primary);
+  --cashlog-sect-title-size: 1.15em;
+}
+
+.cashlog-section,
+.cashlog-modal-group,
+.cashlog-settings-section {
+  margin-bottom: var(--cashlog-sect-gap);
+  padding: var(--cashlog-sect-pad);
+  border: var(--cashlog-sect-border);
+  border-radius: var(--cashlog-sect-radius);
+  background: var(--cashlog-sect-bg);
+}
+
+.cashlog-section-title,
+.cashlog-modal-group-title,
+.cashlog-settings-section-title {
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--interactive-accent);
+  font-size: var(--cashlog-sect-title-size);
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+/* 分区说明文字：统一后各处都可用，避免再各写一份 */
+.cashlog-settings-section {
+  /* 贴边结构：标题贴顶、内容贴底，上下圆角由 section 的 overflow 裁切。
+     统一规则里的 padding 必须清零，否则标题/内容离开卡片边缘，圆角就没了。
+     底色与 content 相同：圆角边缘的抗锯齿会透出它，异色会被看成「漏色」。 */
+  padding: 0;
+  background: var(--background-secondary);
+}
+
+.cashlog-section-desc {
+  margin: -4px 0 10px;
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* 分区标题行的操作区占位：把开关推到最右侧 */
+.cashlog-settings-header-spacer {
+  flex: 1;
+}
+
+/* 子母层阴影：深色主题下加深，否则浅阴影在深背景上看不出来 */
+body.theme-dark .cashlog-settings-header {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+body.theme-dark .cashlog-settings-content {
+  /* 深色背景下暗阴影会被背景吃掉；改用顶部一道极淡亮线，让接缝仍有层次 */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11);
+}
+
+/* 账户初始余额：标题行右侧的显示/隐藏眼睛 */
+.cashlog-balance-header {
+  margin-top: 14px;
+}
+
+.cashlog-balance-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cashlog-balance-eye:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
 }

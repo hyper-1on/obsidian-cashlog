@@ -93,6 +93,10 @@
   "modal.modifyLabel": "Edit {label}",
 
   "cashlogModal.title": "Create or Edit Entry",
+  "cashlogModal.group.type": "Type",
+  "cashlogModal.group.detail": "Details",
+  "cashlogModal.group.attachment": "Attachment",
+  "cashlogModal.group.time": "Time",
   "cashlogModal.type": "Type",
   "cashlogModal.type.expense": "Expense",
   "cashlogModal.type.income": "Income",
@@ -345,6 +349,7 @@
   "panelSettings.attachmentFolderPlaceholder": "Enter folder path, supports fuzzy search",
   "panelSettings.accountList": "Account list",
   "panelSettings.accountInitialBalance": "Initial balance",
+  "panelSettings.toggleBalanceVisibility": "Toggle balance visibility",
   "panelSettings.noBudget": "No budgets yet, click below to add",
   "panelSettings.noGoal": "No goals yet, click below to add",
   "panelSettings.statsMode": "Statistics mode",

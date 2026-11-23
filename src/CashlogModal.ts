@@ -7,6 +7,7 @@ import { AttachmentManager } from "./AttachmentManager";
 import { AccountManager } from "./AccountManager";
 import { validateEntryData } from "./EntryEditor";
 import { t, tp, getCurrencySymbol } from "./i18n";
+import { createSection } from "./ui/Section";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）
@@ -176,13 +177,17 @@ export class CashlogModal extends Modal {
     if (needsFullRebuild) {
       contentEl.empty();
       // 渲染类型选择器（稳定字段，永不重建）
-      this.renderTypeFieldStable(contentEl);
+      const typeBody = createSection(contentEl, { title: t("cashlogModal.group.type") });
+
+      this.renderTypeFieldStable(typeBody);
     }
 
     // 获取或创建条件字段区域容器
     let conditionalArea = contentEl.querySelector(".cashlog-conditional-area") as HTMLElement;
     if (!conditionalArea) {
-      conditionalArea = contentEl.createDiv({ cls: "cashlog-conditional-area" });
+      const detailBody = createSection(contentEl, { title: t("cashlogModal.group.detail") });
+
+      conditionalArea = detailBody.createDiv({ cls: "cashlog-conditional-area" });
     }
     conditionalArea.empty();
 
@@ -207,13 +212,15 @@ export class CashlogModal extends Modal {
       }
     }
 
-    // 渲染附件、日期时间、按钮（仅首次渲染）
+    // 组 3、4：附件与时间；按钮不进组，贴在最后
     if (needsFullRebuild) {
       if (this.settings.enableAttachments) {
-        this.renderAttachmentSection(contentEl);
+        const attachBody = createSection(contentEl, { title: t("cashlogModal.group.attachment") });
+        this.renderAttachmentSection(attachBody);
       }
-      this.renderDateField(contentEl);
-      this.renderTimeField(contentEl);
+      const timeBody = createSection(contentEl, { title: t("cashlogModal.group.time") });
+      this.renderDateField(timeBody);
+      this.renderTimeField(timeBody);
       this.renderButtons(contentEl);
     }
 

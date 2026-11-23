@@ -434,7 +434,7 @@ function renderCategoryRankFromEntries(
   hideAmounts: boolean,
 ): void {
   const section = container.createDiv({ cls: "cashlog-section" });
-  const titleEl = section.createEl("h4", { text: t("dashboard.section.categoryRanking"), cls: "cashlog-section-title" });
+  const titleEl = section.createEl("h4", { text: t("dashboard.section.categoryRanking"), cls: "cashlog-section-title cashlog-section-title-link" });
   titleEl.addEventListener("click", () => {
     callbacks.showPieChart(allEntries, settings.expenseTag);
   });

@@ -125,7 +125,7 @@ export class CashlogView extends ItemView {
     this.renderTabBar();
 
     // 设置页里的金额展示也要跟随隐私开关
-    setPanelHideAmounts(this.hideAmounts);
+    setPanelHideAmounts(this.hideAmounts, () => this.toggleHideAmounts());
 
     this.clearPanelContent();
 
@@ -142,7 +142,17 @@ export class CashlogView extends ItemView {
 
   private toggleHideAmounts(): void {
     this.hideAmounts = !this.hideAmounts;
-    if (this.activeTab !== "dashboard") return;
+    // 两个页面共用同一个隐私状态，切页时不会互相覆盖
+    setPanelHideAmounts(this.hideAmounts);
+
+    if (this.activeTab === "settings") {
+      // 设置页自己会保住滚动位置，这里只补它不管的清理
+      this.destroyPieChart();
+      hideTooltip();
+      renderPanelSettings(this.panelContentEl, this.plugin);
+      return;
+    }
+
     if (this.subPage) {
       // 子页面也提供切换按钮，切换后重渲染当前子页面即可
       this.renderSubPage();
