@@ -47,9 +47,10 @@ export default class CashlogPlugin extends Plugin {
       void this.activateCashlogPanel();
     });
 
-    // 编辑器右键菜单：记账与插入图表。
+    // 编辑器右键菜单：记账（一级）与「插入 → 账目图表」（二级）。
     // 放在右键而不是 ribbon —— 两个命令都依赖「光标所在行」，
     // 右键不会移动焦点，editor.getCursor() 才是用户真正想操作的那一行。
+    // 图表收进「插入」子菜单里，避免和 Obsidian 自带的表格操作混淆。
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
         menu.addItem((item) =>
@@ -60,14 +61,19 @@ export default class CashlogPlugin extends Plugin {
               createOrEdit(false, editor, view, this);
             }),
         );
-        menu.addItem((item) =>
-          item
-            .setTitle(t("commands.insertChart"))
-            .setIcon("table")
-            .onClick(() => {
-              new ChartModal(this.app, this, editor).open();
-            }),
-        );
+
+        menu.addItem((item) => {
+          item.setTitle(t("menu.insert")).setIcon("plus");
+          const submenu = item.setSubmenu();
+          submenu.addItem((sub) =>
+            sub
+              .setTitle(t("menu.chart"))
+              .setIcon("chart-column")
+              .onClick(() => {
+                new ChartModal(this.app, this, editor).open();
+              }),
+          );
+        });
       }),
     );
 

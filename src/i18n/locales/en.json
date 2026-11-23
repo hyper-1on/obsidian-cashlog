@@ -1,5 +1,7 @@
 {
   "commands.createOrEdit": "Create or edit",
+  "menu.insert": "Insert",
+  "menu.chart": "Cashlog chart",
   "commands.insertChart": "Insert chart",
   "commands.openPanel": "Open Cashlog panel",
 

@@ -1,5 +1,7 @@
 {
   "commands.createOrEdit": "创建或编辑记账",
+  "menu.insert": "插入",
+  "menu.chart": "账目图表",
   "commands.insertChart": "插入图表",
   "commands.openPanel": "打开 Cashlog 面板",
 
