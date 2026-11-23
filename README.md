@@ -1,5 +1,10 @@
 # Cashlog
 
+> **Fork notice** — This is a fork of
+> [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog),
+> maintained at [hyper-1on/obsidian-cashlog](https://github.com/hyper-1on/obsidian-cashlog).
+> See **[PATCH.md](PATCH.md)** for the complete list of defects fixed relative to upstream.
+
 A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record income and expenses directly in your Markdown notes with an emoji-based syntax, then query, visualize, and analyze your data — all within your vault.
 
 **[中文文档](https://github.com/uuq007/obsidian-cashlog/blob/main/README_zh.md)**
