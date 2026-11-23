@@ -68,8 +68,9 @@ export function buildEntryLocationForCursor(
   return new EntryLocation(file.path, lineNumber);
 }
 
-// 创建或编辑记账条目
-function createOrEdit(
+// 创建或编辑记账条目。
+// 导出是为了让编辑器右键菜单复用同一套逻辑（菜单与命令必须行为一致）。
+export function createOrEdit(
   checking: boolean,
   editor: Editor,
   view: { file?: TFile | null } | null,

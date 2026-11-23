@@ -2,7 +2,8 @@
 import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
 import { CashlogSettings, createDefaultSettings } from "./Settings";
 import { CashlogSettingsTab } from "./SettingsTab";
-import { addCommands } from "./Commands";
+import { addCommands, createOrEdit } from "./Commands";
+import { ChartModal } from "./ChartModal";
 import { Cache } from "./Cache";
 import { resolveEntryLine } from "./EntryLocator";
 import { Query, withGlobalQuery } from "./Query/Query";
@@ -45,6 +46,30 @@ export default class CashlogPlugin extends Plugin {
     this.addRibbonIcon("coins", t("commands.openPanel"), () => {
       void this.activateCashlogPanel();
     });
+
+    // 编辑器右键菜单：记账与插入图表。
+    // 放在右键而不是 ribbon —— 两个命令都依赖「光标所在行」，
+    // 右键不会移动焦点，editor.getCursor() 才是用户真正想操作的那一行。
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor, view) => {
+        menu.addItem((item) =>
+          item
+            .setTitle(t("commands.createOrEdit"))
+            .setIcon("square-pen")
+            .onClick(() => {
+              createOrEdit(false, editor, view, this);
+            }),
+        );
+        menu.addItem((item) =>
+          item
+            .setTitle(t("commands.insertChart"))
+            .setIcon("table")
+            .onClick(() => {
+              new ChartModal(this.app, this, editor).open();
+            }),
+        );
+      }),
+    );
 
     // 注册 Cashlog 面板视图
     this.registerView(CASHLOG_VIEW_TYPE, (leaf) => new CashlogView(leaf, this));
