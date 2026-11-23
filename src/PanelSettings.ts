@@ -33,8 +33,10 @@ export function setPanelHideAmounts(hideAmounts: boolean): void {
 }
 
 export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugin): void {
-  // 保存滚动位置
+  // 保存滚动位置：同时记录「相对比例」，因为重建后内容高度可能变化，
+  // 只记绝对像素会在内容变短时被浏览器夹取到新的底部。
   const scrollTop = container.scrollTop;
+  const maxScrollBefore = container.scrollHeight - container.clientHeight;
 
   // 确保 container 有 createEl 方法（polyfill for 非 Obsidian 容器）
   if (typeof container.createEl !== "function") {
@@ -57,8 +59,8 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
   const s = plugin.settings;
 
   // ========== 标签设置 ==========
-  renderSection(container, "tags", "💰", t("panelSettings.sectionTags"), () => {
-    renderTagButton(container, t("panelSettings.incomeTag"), s.incomeTag, plugin, async (newTag) => {
+  renderSection(container, "tags", "💰", t("panelSettings.sectionTags"), (content) => {
+    renderTagButton(content, t("panelSettings.incomeTag"), s.incomeTag, plugin, async (newTag) => {
       const oldTag = s.incomeTag;
       s.incomeTag = newTag;
       await plugin.saveData(s);
@@ -68,7 +70,7 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       }
     });
 
-    renderTagButton(container, t("panelSettings.expenseTag"), s.expenseTag, plugin, async (newTag) => {
+    renderTagButton(content, t("panelSettings.expenseTag"), s.expenseTag, plugin, async (newTag) => {
       const oldTag = s.expenseTag;
       s.expenseTag = newTag;
       await plugin.saveData(s);
@@ -80,7 +82,7 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
 
     // 开启账户功能后才显示转账和余额变更标签设置
     if (s.enableAccounts) {
-      renderTagButton(container, t("panelSettings.transferTag"), s.transferTag, plugin, async (newTag) => {
+      renderTagButton(content, t("panelSettings.transferTag"), s.transferTag, plugin, async (newTag) => {
         const oldTag = s.transferTag;
         s.transferTag = newTag;
         await plugin.saveData(s);
@@ -90,7 +92,7 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
         }
       });
 
-      renderTagButton(container, t("panelSettings.balanceChangeTag"), s.balanceChangeTag, plugin, async (newTag) => {
+      renderTagButton(content, t("panelSettings.balanceChangeTag"), s.balanceChangeTag, plugin, async (newTag) => {
         const oldTag = s.balanceChangeTag;
         s.balanceChangeTag = newTag;
         await plugin.saveData(s);
@@ -101,123 +103,114 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       });
     }
 
-    renderSubTagList(container, t("panelSettings.incomeSubTags"), s.incomeSubTags, s.incomeTag, plugin);
+    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeSubTags, s.incomeTag, plugin);
 
-    renderSubTagList(container, t("panelSettings.expenseSubTags"), s.expenseSubTags, s.expenseTag, plugin);
+    renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseSubTags, s.expenseTag, plugin);
   });
 
   // ========== 账户设置 ==========
-  renderSection(container, "accounts", "💳", t("panelSettings.sectionAccounts"), () => {
-    renderToggleRow(container, t("panelSettings.enableAccounts"), s.enableAccounts, async (v) => {
+  renderSection(container, "accounts", "💳", t("panelSettings.sectionAccounts"), (content) => {
+    renderToggleRow(content, t("panelSettings.enableAccounts"), s.enableAccounts, async (v) => {
       s.enableAccounts = v;
       await plugin.saveSettingsAndReindex();
       renderPanelSettings(container, plugin);
     });
 
     if (s.enableAccounts) {
-      renderDivider(container);
-
       // 账户 chip 列表
-      renderAccountList(container, plugin);
-
-      renderDivider(container);
+      renderAccountList(content, plugin);
 
       // 账户初始余额标题
       const balanceTitle = activeDocument.createElement("div");
       balanceTitle.className = "cashlog-settings-label cashlog-balance-title";
       balanceTitle.textContent = t("panelSettings.accountInitialBalance");
-      container.appendChild(balanceTitle);
+      content.appendChild(balanceTitle);
 
       // 每个账户的余额按钮
       for (const acct of s.accounts) {
-        renderBalanceButton(container, acct, plugin);
+        renderBalanceButton(content, acct, plugin);
       }
     }
   });
 
   // ========== 附件设置 ==========
-  renderSection(container, "attachments", "📎", t("panelSettings.sectionAttachments"), () => {
-    renderToggleRow(container, t("panelSettings.enableAttachments"), s.enableAttachments, async (v) => {
+  renderSection(container, "attachments", "📎", t("panelSettings.sectionAttachments"), (content) => {
+    renderToggleRow(content, t("panelSettings.enableAttachments"), s.enableAttachments, async (v) => {
       s.enableAttachments = v;
       await plugin.saveSettings();
       renderPanelSettings(container, plugin);
     });
 
     if (s.enableAttachments) {
-      renderDivider(container);
-      renderAttachmentFolderRow(container, plugin);
+      renderAttachmentFolderRow(content, plugin);
     }
   });
 
   // ========== 预算设置 ==========
-  renderSection(container, "budget", "📊", t("panelSettings.sectionBudget"), () => {
-    renderToggleRow(container, t("panelSettings.enableBudgets"), s.enableBudgets, async (v) => {
+  renderSection(container, "budget", "📊", t("panelSettings.sectionBudget"), (content) => {
+    renderToggleRow(content, t("panelSettings.enableBudgets"), s.enableBudgets, async (v) => {
       s.enableBudgets = v;
       await plugin.saveSettings();
       renderPanelSettings(container, plugin);
     });
 
     if (s.enableBudgets) {
-      renderDivider(container);
-
       // 已有预算列表
       if (s.budgets.length > 0) {
         for (let i = 0; i < s.budgets.length; i++) {
           const b = s.budgets[i];
-          renderBudgetCard(container, b, async () => {
+          renderBudgetCard(content, b, async () => {
             s.budgets.splice(i, 1);
             await plugin.saveSettings();
             renderPanelSettings(container, plugin);
           });
         }
       } else {
-        container.createDiv({
+        content.createDiv({
           cls: "cashlog-settings-empty",
           text: t("panelSettings.noBudget")
         });
       }
 
       // 新增预算表单
-      renderAddBudgetForm(container, plugin);
+      renderAddBudgetForm(content, plugin);
     }
   });
 
   // ========== 目标设置 ==========
-  renderSection(container, "budget", "🎯", t("panelSettings.sectionGoals"), () => {
-    renderToggleRow(container, t("panelSettings.enableGoals"), s.enableGoals, async (v) => {
+  renderSection(container, "budget", "🎯", t("panelSettings.sectionGoals"), (content) => {
+    renderToggleRow(content, t("panelSettings.enableGoals"), s.enableGoals, async (v) => {
       s.enableGoals = v;
       await plugin.saveSettings();
       renderPanelSettings(container, plugin);
     });
 
     if (s.enableGoals) {
-      renderDivider(container);
-
       // 已有目标列表
       if (s.goals.length > 0) {
         for (let i = 0; i < s.goals.length; i++) {
           const g = s.goals[i];
-          renderGoalCard(container, g, async () => {
+          renderGoalCard(content, g, async () => {
             s.goals.splice(i, 1);
             await plugin.saveSettings();
             renderPanelSettings(container, plugin);
           });
         }
       } else {
-        container.createDiv({
+        content.createDiv({
           cls: "cashlog-settings-empty",
           text: t("panelSettings.noGoal")
         });
       }
 
       // 新增目标表单
-      renderAddGoalForm(container, plugin);
+      renderAddGoalForm(content, plugin);
     }
   });
 
   // ========== 统计设置 ==========
-  renderSection(container, "stats", "📈", t("panelSettings.sectionStats"), () => {
-    renderSelectRow(container, t("panelSettings.statsMode"), s.statsMode, [
+  renderSection(container, "stats", "📈", t("panelSettings.sectionStats"), (content) => {
+    renderSelectRow(content, t("panelSettings.statsMode"), s.statsMode, [
       { value: "day", label: t("dashboard.period.day") },
       { value: "week", label: t("dashboard.period.week") },
       { value: "month", label: t("dashboard.period.month") },
@@ -230,7 +223,7 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
     });
 
     if (s.statsMode === "month") {
-      renderInputRow(container, t("panelSettings.monthStartDay"), String(s.statsMonthStartDay), async (v) => {
+      renderInputRow(content, t("panelSettings.monthStartDay"), String(s.statsMonthStartDay), async (v) => {
         const d = parseInt(v) || 1;
         s.statsMonthStartDay = Math.max(1, Math.min(28, d));
         await plugin.saveSettings();
@@ -247,7 +240,7 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
         { value: "5", label: t("settings.weekStartDay.5") },
         { value: "6", label: t("settings.weekStartDay.6") }
       ];
-      renderSelectRow(container, t("panelSettings.weekStartDay"), String(s.statsWeekStartDay), weekDays, async (v) => {
+      renderSelectRow(content, t("panelSettings.weekStartDay"), String(s.statsWeekStartDay), weekDays, async (v) => {
         s.statsWeekStartDay = parseInt(v);
         await plugin.saveSettings();
       });
@@ -255,21 +248,21 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
   });
 
   // ========== 高级设置 ==========
-  renderSection(container, "advanced", "⚙️", t("panelSettings.sectionAdvanced"), () => {
-    renderToggleRow(container, t("panelSettings.showEditButton"), s.showEditButton, async (v) => {
+  renderSection(container, "advanced", "⚙️", t("panelSettings.sectionAdvanced"), (content) => {
+    renderToggleRow(content, t("panelSettings.showEditButton"), s.showEditButton, async (v) => {
       s.showEditButton = v;
       await plugin.saveSettings();
     });
 
-    renderToggleRow(container, t("panelSettings.showNoteLink"), s.showNoteLink, async (v) => {
+    renderToggleRow(content, t("panelSettings.showNoteLink"), s.showNoteLink, async (v) => {
       s.showNoteLink = v;
       await plugin.saveSettings();
     });
   });
 
   // ========== 重置 ==========
-  renderSection(container, "advanced", "🔄", t("panelSettings.sectionReset"), () => {
-    const row = container.createDiv({ cls: "cashlog-settings-row" });
+  renderSection(container, "advanced", "🔄", t("panelSettings.sectionReset"), (content) => {
+    const row = content.createDiv({ cls: "cashlog-settings-row" });
 
     const label = row.createDiv();
     label.createDiv({ text: t("panelSettings.restoreDefaults"), cls: "cashlog-settings-label" });
@@ -288,9 +281,19 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
     });
   });
 
-  // 恢复滚动位置
+  // 恢复滚动位置（按比例）。
+  // 重建是同步的，DOM 此时已就位，所以先立刻恢复一次；
+  // 再在后续两帧各校正一次 —— Obsidian 在首帧后仍可能再触发布局，
+  // 只写一次会被那次布局覆盖，外部表现就是面板上下跳动。
+  const scrollRatio = maxScrollBefore > 0 ? scrollTop / maxScrollBefore : 0;
+  const applyScroll = (): void => {
+    const maxScrollAfter = container.scrollHeight - container.clientHeight;
+    container.scrollTop = maxScrollAfter > 0 ? scrollRatio * maxScrollAfter : 0;
+  };
+  applyScroll();
   window.requestAnimationFrame(() => {
-    container.scrollTop = scrollTop;
+    applyScroll();
+    window.requestAnimationFrame(applyScroll);
   });
 }
 
@@ -301,7 +304,7 @@ function renderSection(
   type: string,
   icon: string,
   title: string,
-  renderContent: () => void
+  renderContent: (content: HTMLElement) => void
 ): void {
   // 使用原生 DOM API 避免 Obsidian 包装问题
   const section = activeDocument.createElement("div");
@@ -319,7 +322,9 @@ function renderSection(
 
   container.appendChild(section);
 
-  renderContent.call(null, content);
+  // 内容必须绘制到 section 内部：此前调用方一律把内容加到外层 container，
+  // 导致每个 section 只剩「标题 + 空的内容块」，内容散落在卡片外面。
+  renderContent(content);
 }
 
 function renderToggleRow(
@@ -459,12 +464,6 @@ function renderSelectRow(
     })();
   });
   row.appendChild(select);
-}
-
-function renderDivider(container: HTMLElement): void {
-  const divider = activeDocument.createElement("div");
-  divider.className = "cashlog-settings-divider";
-  container.appendChild(divider);
 }
 
 // 标签编辑按钮：替换原来的文本框，点击弹出编辑弹窗

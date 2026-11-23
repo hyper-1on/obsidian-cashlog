@@ -1103,12 +1103,6 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   color: white;
 }
 
-.cashlog-settings-divider {
-  height: 1px;
-  background: var(--background-modifier-border);
-  margin: 12px 0;
-}
-
 .cashlog-settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

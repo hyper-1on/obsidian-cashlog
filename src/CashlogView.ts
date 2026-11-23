@@ -169,7 +169,12 @@ export class CashlogView extends ItemView {
       };
       renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
     } else if (this.activeTab === "settings") {
-      this.clearPanelContent();
+      // 不要调用 clearPanelContent()：它会 empty() 容器，使 scrollTop 立刻归 0，
+      // 随后 renderPanelSettings 读到的滚动位置已是 0、只能恢复成 0，
+      // 于是每次刷新（删除账户/子标签、切换功能开关）面板都会跳回顶部。
+      // renderPanelSettings 自己负责清空与按比例恢复，这里只补它不管的清理职责。
+      this.destroyPieChart();
+      hideTooltip();
       renderPanelSettings(this.panelContentEl, this.plugin);
     }
   }
