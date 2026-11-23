@@ -160,8 +160,9 @@ chart labels true
 | `show summary` | Show summary of total income / total expense / net balance |
 | `show group subtotal` | Show subtotals at the end of each group when grouped |
 | `show tag in description` | Show tags in the description column |
-| `table columns N` | Set the number of table columns (1-6) |
+| `table columns N` | Set the number of table columns (1-12) |
 | `colN field ["header"] [alignment]` | Configure the content displayed in each column |
+| `column field ["header"] [alignment]` | Order-based: columns appear in the order written |
 
 #### Pie Charts
 
@@ -1023,11 +1024,13 @@ Default is 6 columns.
 
 #### Column Configuration
 
-The configuration format for each column is `colN field ["header name"] [alignment]`, where N is the column number (1-6).
+The configuration format for each column is `colN field ["header name"] [alignment]`, where N is the column number (1-12).
+
+An alternative **order-based** syntax is also available: `column field ["header name"] [alignment]`. Columns appear in the order you write them, so reordering or inserting a column just means moving a line. Use either `colN` or `column` within one block — mixing the two is reported as an error.
 
 | Parameter | Options | Description |
 |------|--------|------|
-| Field | `date`, `amount`, `account`, `description`, `attachment`, `link` | Data type displayed in this column |
+| Field | `date`, `amount`, `account`, `description`, `attachment`, `link`, `type`, `tag`, `time` | Data type displayed in this column |
 | Header name | `"Custom Name"` | Optional; custom header text. Leave empty for default name |
 | Alignment | `left`, `center`, `right` | Optional; text alignment for this column |
 
@@ -1053,6 +1056,13 @@ table columns 3
 col1 date "" left
 col2 amount "" left
 col3 description "" left
+```
+
+```
+# Same table with the order-based syntax (order = column order)
+column date "Date" center
+column amount "Amount" right
+column tag "Tags" left
 ```
 
 ### Limiting Results

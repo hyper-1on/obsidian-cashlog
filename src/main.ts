@@ -41,6 +41,11 @@ export default class CashlogPlugin extends Plugin {
     // 注册命令
     addCommands(this);
 
+    // 左侧栏图标：一键打开面板（复用已有的 activateCashlogPanel）
+    this.addRibbonIcon("coins", t("commands.openPanel"), () => {
+      void this.activateCashlogPanel();
+    });
+
     // 注册 Cashlog 面板视图
     this.registerView(CASHLOG_VIEW_TYPE, (leaf) => new CashlogView(leaf, this));
 

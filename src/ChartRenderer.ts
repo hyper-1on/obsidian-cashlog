@@ -238,6 +238,24 @@ function renderEntryRow(
         }
         break;
       }
+      case "tag": {
+        const td = tr.createEl("td", { cls: "cashlog-chart-tags" });
+        td.style.textAlign = col.align;
+        if (entry.tags.length > 0) {
+          for (const tag of entry.tags) {
+            td.createEl("a", { cls: "tag", attr: { href: tag }, text: tag });
+            td.appendText(" ");
+          }
+        } else {
+          td.setText("-");
+        }
+        break;
+      }
+      case "time": {
+        const td = tr.createEl("td", { text: entry.time || "-" });
+        td.style.textAlign = col.align;
+        break;
+      }
     }
   }
 }

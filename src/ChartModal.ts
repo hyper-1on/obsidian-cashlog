@@ -2,7 +2,7 @@
 import { App, Editor, Modal, Notice, Setting } from "obsidian";
 import type CashlogPlugin from "./main";
 import type { CashlogEntry } from "./CashlogEntry";
-import { MAX_TABLE_COLS } from "./Query/Query";
+import { MAX_TABLE_COLS, type TableColConfig } from "./Query/Query";
 import { t, tp } from "./i18n";
 
 // 图表类型
@@ -57,11 +57,7 @@ export class ChartModal extends Modal {
   // 图表尺寸：预设切换时需要回写宽高输入框
   private sizeWidthInput: HTMLInputElement | null = null;
   private sizeHeightInput: HTMLInputElement | null = null;
-  private tableCols: Array<{
-    field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
-    header: string;
-    align: "left" | "center" | "right";
-  }> = [
+  private tableCols: TableColConfig[] = [
     { field: "date", header: "", align: "left" },
     { field: "amount", header: "", align: "left" },
     { field: "account", header: "", align: "left" },
@@ -832,6 +828,8 @@ export class ChartModal extends Modal {
       { value: "attachment" as const, label: t("chartModal.field.attachment") },
       { value: "link" as const, label: t("chartModal.field.link") },
       { value: "type" as const, label: t("chartModal.field.type") },
+      { value: "tag" as const, label: t("chartModal.field.tag") },
+      { value: "time" as const, label: t("chartModal.field.time") },
     ];
 
     for (let i = 0; i < this.tableColCount; i++) {
@@ -861,14 +859,7 @@ export class ChartModal extends Modal {
         .setDesc(t("chartModal.col.headerDesc"))
         .addText((text) =>
           text
-            .setPlaceholder(
-              col.field === "date" ? t("chartModal.field.date") :
-              col.field === "amount" ? t("chartModal.field.amount") :
-              col.field === "account" ? t("chartModal.field.account") :
-              col.field === "attachment" ? t("chartModal.field.attachment") :
-              col.field === "description" ? t("chartModal.field.description") :
-              col.field === "type" ? t("chartModal.field.type") : t("chartModal.field.link")
-            )
+            .setPlaceholder(t(`chartModal.field.${col.field}`))
             .setValue(col.header)
             .onChange((v) => { this.tableCols[i].header = v; }),
         );

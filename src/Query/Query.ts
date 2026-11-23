@@ -8,7 +8,7 @@ import { t, tp } from "../i18n";
 
 // 表格列配置
 export interface TableColConfig {
-  field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
+  field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type" | "tag" | "time";
   header: string;
   align: "left" | "center" | "right";
 }
@@ -17,6 +17,11 @@ export interface TableColConfig {
 export interface TableConfig {
   colCount: number;
   cols: TableColConfig[];
+  // 是否使用顺序式 column 语法：首次出现时清空默认列，
+  // 并与 colN / table columns 互斥（混用会让列序无法预测，直接报错）
+  usesColumnSyntax?: boolean;
+  // 是否使用 colN / table columns 语法
+  usesIndexedSyntax?: boolean;
 }
 
 // 默认表格配置
@@ -52,7 +57,7 @@ export const PANEL_PIE_COLORS = [
   "#d946ef", "#22c55e", "#fb923c", "#64748b", "#7c3aed",
 ];
 
-// colN 可用的列字段
+// colN / column 可用的列字段
 export const TABLE_COL_FIELDS: TableColConfig["field"][] = [
   "date",
   "amount",
@@ -61,11 +66,13 @@ export const TABLE_COL_FIELDS: TableColConfig["field"][] = [
   "attachment",
   "link",
   "type",
+  "tag",
+  "time",
 ];
 
-// 单条表格指令（table columns / colN）的解析结果
+// 单条表格指令（table columns / colN / column）的解析结果
 export interface TableDirective {
-  kind: "columns" | "col";
+  kind: "columns" | "col" | "column";
   colCount?: number;
   colIndex?: number;
   field?: TableColConfig["field"];
@@ -119,12 +126,61 @@ export function parseTableDirective(line: string): TableDirective | null {
     };
   }
 
+  // 顺序式 column 指令：出现顺序即列顺序（推荐写法）
+  const columnMatch = line.match(/^column\s+(\w+)(?:\s+"((?:[^"\\]|\\.)*)")?(?:\s+(left|center|right))?$/i);
+  if (columnMatch) {
+    const field = columnMatch[1].toLowerCase();
+    if (!TABLE_COL_FIELDS.includes(field as TableColConfig["field"])) {
+      return {
+        kind: "column",
+        error: tp("error.tableColumnFieldUnsupported", {
+          field,
+          options: TABLE_COL_FIELDS.join(", "),
+        }),
+      };
+    }
+    return {
+      kind: "column",
+      field: field as TableColConfig["field"],
+      header: columnMatch[2] !== undefined ? columnMatch[2].replace(/\\"/g, '"') : undefined,
+      align: columnMatch[3] as TableColConfig["align"] | undefined,
+    };
+  }
+
   return null;
 }
 
 // 把一条表格指令应用到配置上；返回错误信息，null 表示成功
 export function applyTableDirective(config: TableConfig, directive: TableDirective): string | null {
   if (directive.error) return directive.error;
+
+  // 顺序式 column：与 colN / table columns 互斥。
+  // 混用会让列序无法预测（colN 按下标定位、column 按出现顺序追加），因此直接报错。
+  if (directive.kind === "column") {
+    if (config.usesIndexedSyntax) return tp("error.tableSyntaxMixed", {});
+    if (!config.usesColumnSyntax) {
+      // 首次使用顺序式语法：丢弃默认列，列序完全由 column 决定
+      config.cols = [];
+      config.usesColumnSyntax = true;
+    }
+    if (config.cols.length >= MAX_TABLE_COLS) {
+      return tp("error.tableColumnsOutOfRange", {
+        line: `column ${directive.field}`,
+        max: MAX_TABLE_COLS,
+      });
+    }
+    config.cols.push({
+      field: directive.field!,
+      header: directive.header ?? "",
+      align: directive.align ?? "left",
+    });
+    config.colCount = config.cols.length;
+    return null;
+  }
+
+  // colN / table columns：同样与 column 互斥
+  if (config.usesColumnSyntax) return tp("error.tableSyntaxMixed", {});
+  config.usesIndexedSyntax = true;
 
   if (directive.kind === "columns") {
     config.colCount = directive.colCount!;
