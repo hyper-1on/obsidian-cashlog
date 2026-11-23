@@ -14,6 +14,7 @@ import {
   parseCashlogLineLenient,
 } from "../src/CashlogSerializer";
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
+import { validateSubTagName } from "../src/TagValidation";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
 import { computeIntegerPercentages, renderChartTable } from "../src/ChartRenderer";
@@ -1475,4 +1476,80 @@ test("[端到端] refresh() 在设置页刷新后不应把面板滚回顶部（�
     500,
     "refresh() 后滚动位置应保持；若跳回 0 说明 refresh 在重建前清空了容器",
   );
+});
+
+// ------------------------------------------- 二级子标签（#支出/餐饮/午餐）
+
+test("[二级] 校验：允许两级，拒绝三级", () => {
+  assert.equal(validateSubTagName("餐饮").valid, true, "一级应合法");
+  assert.equal(validateSubTagName("餐饮/午餐").valid, true, "两级应合法");
+  assert.equal(validateSubTagName("a/b/c").valid, false, "三级应被拒绝");
+});
+
+test("[二级] 校验：拒绝空段（a//b、/a、a/、单独的 /）", () => {
+  for (const bad of ["a//b", "/a", "a/", "/"]) {
+    assert.equal(validateSubTagName(bad).valid, false, `${bad} 应判为非法`);
+  }
+});
+
+test("[二级] 解析：getCategory 返回完整两级路径", () => {
+  const e = parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", makeSettings())!;
+  assert.equal(e.getCategory("#支出"), "餐饮/午餐", "getCategory 应保留完整二级路径");
+});
+
+test("[二级] getTopCategory 折叠到一级", () => {
+  const e = parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", makeSettings())!;
+  assert.equal(e.getTopCategory("#支出"), "餐饮");
+});
+
+test("[二级] getTopCategory 对一级子标签原样返回", () => {
+  const e = parse("- #支出/交通 地铁 💴-5 ➕2026-04-25", makeSettings())!;
+  assert.equal(e.getTopCategory("#支出"), "交通");
+});
+
+test("[二级] group by tag 默认按一级汇总，二级不单独成组", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/餐饮/晚餐 晚饭 💴-50 ➕2026-04-25", settings),
+    parse("- #支出/交通 地铁 💴-5 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+
+  assert.ok(keys.includes("#支出/餐饮"), `应出现一级分组，实际: ${keys.join(" | ")}`);
+  assert.ok(!keys.includes("#支出/餐饮/午餐"), "二级不应单独成组");
+  assert.ok(!keys.includes("#支出/餐饮/晚餐"), "二级不应单独成组");
+});
+
+test("[二级] group by tag level 2 保留完整标签", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/餐饮/晚餐 晚饭 💴-50 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag level 2", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+
+  assert.ok(keys.includes("#支出/餐饮/午餐"), `level 2 应保留完整标签，实际: ${keys.join(" | ")}`);
+  assert.ok(keys.includes("#支出/餐饮/晚餐"));
+});
+
+test("[对照] group by tag 对无子标签的条目保持原样", () => {
+  const settings = makeSettings();
+  const entries = [parse("- #支出 杂项 💴-9 ➕2026-04-25", settings)]
+    .filter((e): e is CashlogEntry => e !== null);
+  const result = new Query("group by tag", settings).apply(entries);
+  assert.equal(result.groups[0].key, "#支出", "一级标签不应被改写");
+});
+
+test("[二级] tag includes 用一级名能命中二级条目", () => {
+  const settings = makeSettings();
+  const entries = [parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", settings)]
+    .filter((e): e is CashlogEntry => e !== null);
+  const result = new Query("tag includes 餐饮", settings).apply(entries);
+  const hit = result.groups.reduce((n, g) => n + g.entries.length, 0);
+  assert.equal(hit, 1, "tag includes 餐饮 应命中 #支出/餐饮/午餐");
 });

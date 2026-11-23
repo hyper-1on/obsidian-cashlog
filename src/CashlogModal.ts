@@ -879,11 +879,10 @@ export class CashlogModal extends Modal {
       for (const entry of allEntries) {
         for (const tag of entry.tags) {
           if (tag.toLowerCase().startsWith(baseLower + "/")) {
+            // 保留完整子标签（含二级，如 "餐饮/午餐"），不再截断到一级
             const sub = tag.substring(baseTag.length + 1);
-            const slashIdx = sub.indexOf("/");
-            const subTag = slashIdx === -1 ? sub : sub.substring(0, slashIdx);
-            if (!subTags.includes(subTag)) {
-              subTags.push(subTag);
+            if (!subTags.includes(sub)) {
+              subTags.push(sub);
             }
           }
         }

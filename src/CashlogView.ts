@@ -388,7 +388,8 @@ export class CashlogView extends ItemView {
     const categoryMap: Record<string, CashlogEntry[]> = {};
 
     for (const entry of expenseEntries) {
-      const category = entry.getCategory(expenseTag) || t("dashboard.categoryFallback");
+      // 分类排行按一级子标签汇总（餐饮/午餐 → 餐饮）
+      const category = entry.getTopCategory(expenseTag) || t("dashboard.categoryFallback");
       if (!categoryMap[category]) categoryMap[category] = [];
       categoryMap[category].push(entry);
     }

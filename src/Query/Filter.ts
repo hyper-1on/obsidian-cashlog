@@ -17,6 +17,8 @@ export interface Sorter {
 // 分组器
 export interface Grouper {
   field: string;
+  // 仅对 tag 分组生效：1（默认）= 按一级子标签汇总，2 = 保留完整标签
+  level?: number;
 }
 
 // 查询结果

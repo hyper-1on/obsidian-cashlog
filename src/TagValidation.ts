@@ -28,7 +28,7 @@ export function validateTagName(name: string): { valid: boolean; message?: strin
   return { valid: true };
 }
 
-// 子标签校验（相比主标签：允许纯数字）
+// 子标签校验（相比主标签：允许纯数字；支持用 / 分层，最多 2 级）
 export function validateSubTagName(name: string): { valid: boolean; message?: string } {
   if (!name) {
     return { valid: false, message: t("validation.subTagName.empty") };
@@ -38,7 +38,15 @@ export function validateSubTagName(name: string): { valid: boolean; message?: st
     return { valid: false, message: t("validation.subTagName.hasSpace") };
   }
 
-  if (!/^[\p{L}\p{N}_-]+$/u.test(name)) {
+  // 分层：一级（餐饮）或二级（餐饮/午餐）；a//b、/a、a/ 这类空段一律拒绝
+  const segments = name.split("/");
+  if (segments.length > 2) {
+    return { valid: false, message: t("validation.subTagName.tooDeep") };
+  }
+  if (segments.some((seg) => seg.length === 0)) {
+    return { valid: false, message: t("validation.subTagName.invalidChars") };
+  }
+  if (!segments.every((seg) => /^[\p{L}\p{N}_-]+$/u.test(seg))) {
     return { valid: false, message: t("validation.subTagName.invalidChars") };
   }
 

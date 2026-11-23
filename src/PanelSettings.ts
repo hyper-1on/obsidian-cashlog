@@ -509,10 +509,9 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
     for (const tag of entry.tags) {
       const tagLower = tag.toLowerCase();
       if (tagLower.startsWith(baseLower + "/")) {
+        // 保留完整子标签（含二级，如 "餐饮/午餐"），不再截断到一级
         const sub = tag.substring(baseTag.length + 1);
-        // 只取第一级子标签
-        const slashIdx = sub.indexOf("/");
-        found.add(slashIdx === -1 ? sub : sub.substring(0, slashIdx));
+        found.add(sub);
       }
     }
   }

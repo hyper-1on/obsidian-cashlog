@@ -446,7 +446,8 @@ function renderCategoryRankFromEntries(
   const categoryEntryMap: Record<string, CashlogEntry[]> = {};
 
   for (const entry of expenseEntries) {
-    const category = entry.getCategory(settings.expenseTag) || t("dashboard.categoryFallback");
+    // 分类排行按一级子标签汇总（餐饮/午餐 → 餐饮）
+    const category = entry.getTopCategory(settings.expenseTag) || t("dashboard.categoryFallback");
     categoryMap[category] = (categoryMap[category] || 0) + Math.abs(entry.amount);
     if (!categoryEntryMap[category]) categoryEntryMap[category] = [];
     categoryEntryMap[category].push(entry);

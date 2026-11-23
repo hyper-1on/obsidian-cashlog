@@ -84,13 +84,23 @@ export class CashlogEntry {
     return this.accountAmounts.find((aa) => aa.amount > 0)?.amount ?? 0;
   }
 
-  // 获取子标签部分（如 #支出/交通 → "交通"）
+  // 获取子标签部分（如 #支出/交通 → "交通"，#支出/交通/地铁 → "交通/地铁"）
   getCategory(mainTag: string): string | null {
     const fullTag = this.tags.find((t) =>
       t.toLowerCase().startsWith(mainTag.toLowerCase() + "/"),
     );
     if (!fullTag) return null;
     return fullTag.substring(mainTag.length + 1);
+  }
+
+  // 获取一级子标签（"餐饮/午餐" → "餐饮"）。
+  // 分组、饼图与分类排行默认按一级汇总：二级是细分，汇总时看一级更符合直觉，
+  // 否则每个二级都会单独成组/成片，图表会被切碎。
+  getTopCategory(mainTag: string): string | null {
+    const category = this.getCategory(mainTag);
+    if (category === null) return null;
+    const slash = category.indexOf("/");
+    return slash === -1 ? category : category.substring(0, slash);
   }
 
   // 获取主要标签（第一个标签）

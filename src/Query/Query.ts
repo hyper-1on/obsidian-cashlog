@@ -42,6 +42,13 @@ export function createDefaultTableConfig(): TableConfig {
 // 表格列数上限（column 顺序式与 colN 下标式共用）
 export const MAX_TABLE_COLS = 12;
 
+// 把完整标签折叠到一级：#支出/餐饮/午餐 → #支出/餐饮；#支出 → #支出。
+// 用于「按标签分组」的默认行为（group by tag），二级细分仍保留在明细里。
+function topLevelTag(fullTag: string): string {
+  const parts = fullTag.split("/");
+  return parts.length <= 2 ? fullTag : `${parts[0]}/${parts[1]}`;
+}
+
 // 图表 / 面板共用调色板。
 // 分两个常量是因为：图表默认用 10 色、面板饼图用满 20 色，且两者历史顺序不同
 // （此处保持各自原有顺序以免配色变化），但定义集中于此，避免各处复制导致漂移。
@@ -475,10 +482,15 @@ export class Query {
       return;
     }
 
-    // group by
-    const groupMatch = line.match(/^group\s+by\s+(tag|date|week|month|year|account|type)/i);
+    // group by（tag 可带 level：默认按一级子标签汇总，level 2 保留完整标签）
+    const groupMatch = line.match(
+      /^group\s+by\s+(tag|date|week|month|year|account|type)(?:\s+level\s+([12]))?/i,
+    );
     if (groupMatch) {
-      this.groupers.push({ field: groupMatch[1].toLowerCase() });
+      this.groupers.push({
+        field: groupMatch[1].toLowerCase(),
+        level: groupMatch[2] ? Number(groupMatch[2]) : undefined,
+      });
       return;
     }
 
@@ -712,9 +724,18 @@ export class Query {
 
       for (const grouper of this.groupers) {
         switch (grouper.field) {
-          case "tag":
-            keyOptions.push([entry.primaryTag || t("group.noTag")]);
+          case "tag": {
+            const fullTag = entry.primaryTag;
+            if (!fullTag) {
+              keyOptions.push([t("group.noTag")]);
+              break;
+            }
+            // 默认折叠到一级（#支出/餐饮/午餐 → #支出/餐饮），
+            // 二级是细分，汇总时看一级更符合直觉，也不会把图表切碎。
+            const level = grouper.level ?? 1;
+            keyOptions.push([level >= 2 ? fullTag : topLevelTag(fullTag)]);
             break;
+          }
           case "date":
             keyOptions.push([entry.date ? entry.date.format("YYYY-MM-DD") : t("group.noDate")]);
             break;

@@ -12,10 +12,15 @@ function splitByOr(value: string): string[] {
   return value.split(/\s+OR\s+/i).map((s) => s.trim()).filter(Boolean);
 }
 
-// 标签匹配：完全匹配或前缀匹配
+// 标签匹配：完全匹配、前缀层级匹配，或中间层级匹配。
+//   #支出          ← target「#支出」（前缀）
+//   #支出/餐饮     ← target「餐饮」（中间层级）
+//   #支出/餐饮/午餐 ← target「餐饮」（中间层级）
+// 要求落在层级边界上，避免「餐饮」误命中「餐饮娱乐」这类不同标签。
 function tagMatches(entryTag: string, target: string): boolean {
   const t = entryTag.toLowerCase();
-  return t === target || t.startsWith(target + "/");
+  if (t === target || t.startsWith(target + "/")) return true;
+  return t.includes("/" + target + "/") || t.endsWith("/" + target);
 }
 
 // 解析一行查询文本为过滤器

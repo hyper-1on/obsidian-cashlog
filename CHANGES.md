@@ -34,6 +34,31 @@
 
 ## 记录
 
+## [2026-11-23] 二级子标签（#支出/餐饮/午餐）
+
+- **类型**：特性
+- **动机**：
+  - 子标签只能一级（`餐饮`），无法区分「午餐 / 晚餐」这类细分
+  - 解析层（`getCategory`）与写入层（`${baseTag}/${subTag}`）**早已支持多级**，
+    真正卡住的只是校验正则和两处「截断到一级」
+- **改动**：
+  - `validateSubTagName` 允许用 `/` 分层，**最多两级**；拒绝 `a//b`、`/a`、`a/` 这类空段
+  - 向导下拉与面板 chips 不再把 `餐饮/午餐` 截断成 `餐饮`
+  - 新增 `CashlogEntry.getTopCategory()`：`餐饮/午餐` → `餐饮`
+  - `group by tag` 默认按**一级汇总**（二级不单独成组）；
+    `group by tag level 2` 保留完整标签（切换接口）
+  - 饼图与分类排行同样按一级汇总
+  - `tag includes` 支持**中间层级匹配**：`tag includes 餐饮` 能命中 `#支出/餐饮/午餐`
+    （要求层级边界，不会误命中「餐饮娱乐」）
+- **涉及文件**：`src/TagValidation.ts`、`src/CashlogModal.ts`、`src/PanelSettings.ts`、
+  `src/CashlogEntry.ts`、`src/Query/Query.ts`、`src/Query/Filter.ts`、
+  `src/Query/FilterParser.ts`、`src/CashlogView.ts`、`src/DashboardRenderer.ts`、
+  两个语言包
+- **影响**：
+  - 旧笔记零迁移（`餐饮` 原样有效，新增两级只是多一种写法）
+  - `tag includes` 语义放宽（中间层级也能命中），但要求落在层级边界上
+  - 回归测试 97 条全绿（新增 9 条 `[二级]` 用例）
+
 ## [2026-11-23] 测试基建入库：tests/ + npm test
 
 - **类型**：工程
