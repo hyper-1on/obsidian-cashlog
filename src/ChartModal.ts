@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { App, Editor, Modal, Notice, Setting, SliderComponent, TextComponent } from "obsidian";
+import { App, Editor, Modal, Notice, Setting } from "obsidian";
 import type CashlogPlugin from "./main";
 import type { CashlogEntry } from "./CashlogEntry";
 import { MAX_TABLE_COLS } from "./Query/Query";
@@ -51,13 +51,12 @@ export class ChartModal extends Modal {
   private tableColCount: number = 6;
   // 列配置区容器：只重建这一块，避免改列数时把列数选择器自身也销毁
   private colConfigContainer: HTMLElement | null = null;
-  // 列数选择器的两个控件（滑块 + 数字），需要互相同步
-  private colCountSlider: SliderComponent | null = null;
-  private colCountText: TextComponent | null = null;
   // 列配置重建的防抖定时器（滑块连续拖动时只重建一次）
   private colCountRebuildTimer: number | null = null;
-  // 防止滑块与数字框互相 setValue 触发 onChange 造成回环
-  private syncingColCount = false;
+
+  // 图表尺寸：预设切换时需要回写宽高输入框
+  private sizeWidthInput: HTMLInputElement | null = null;
+  private sizeHeightInput: HTMLInputElement | null = null;
   private tableCols: Array<{
     field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
     header: string;
@@ -333,6 +332,75 @@ export class ChartModal extends Modal {
     const group = container.createDiv({ cls: "cashlog-modal-group" });
     group.createDiv({ cls: "cashlog-modal-group-title", text: title });
     return group.createDiv({ cls: "cashlog-modal-group-body" });
+  }
+
+  // 图表尺寸：预设下拉 + 宽高输入 + 按真实宽高比缩放的预览框
+  private buildChartSizeSetting(container: HTMLElement): void {
+    const setting = new Setting(container).setName(t("chartModal.chartSize"));
+
+    // 预设档位：选中后直接填入宽高
+    setting.addDropdown((dd) =>
+      dd
+        .addOption("custom", t("chartModal.sizePresetCustom"))
+        .addOption("small", t("chartModal.sizePresetSmall"))
+        .addOption("medium", t("chartModal.sizePresetMedium"))
+        .addOption("large", t("chartModal.sizePresetLarge"))
+        .setValue(this.matchSizePreset())
+        .onChange((v) => {
+          if (v === "small") {
+            this.chartWidth = 400;
+            this.chartHeight = 300;
+          } else if (v === "medium") {
+            this.chartWidth = 600;
+            this.chartHeight = 400;
+          } else if (v === "large") {
+            this.chartWidth = 800;
+            this.chartHeight = 600;
+          } else {
+            return; // 自定义：保留当前数值
+          }
+          if (this.sizeWidthInput) this.sizeWidthInput.value = String(this.chartWidth);
+          if (this.sizeHeightInput) this.sizeHeightInput.value = String(this.chartHeight);
+        }),
+    );
+
+    // 宽度
+    setting.addText((text) => {
+      text.inputEl.type = "number";
+      text.inputEl.min = "200";
+      text.inputEl.max = "1200";
+      this.sizeWidthInput = text.inputEl;
+      text.setValue(String(this.chartWidth));
+      text.onChange((v) => {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n)) this.chartWidth = n;
+      });
+    });
+
+    // 高度
+    setting.addText((text) => {
+      text.inputEl.type = "number";
+      text.inputEl.min = "150";
+      text.inputEl.max = "800";
+      this.sizeHeightInput = text.inputEl;
+      text.setValue(String(this.chartHeight));
+      text.onChange((v) => {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n)) this.chartHeight = n;
+      });
+    });
+
+    // 尺寸选择到此为止；不提供预览框，避免受弹窗宽度限制而失真
+  }
+
+  // 当前宽高对应哪个预设档位
+  private matchSizePreset(): string {
+    const w = this.chartWidth;
+    const h = this.chartHeight;
+    if (w === 400 && h === 300) return "small";
+    if (w === 600 && h === 400) return "medium";
+    if (w === 800 && h === 600) return "large";
+    return "custom";
   }
 
   // 从缓存中提取匹配当前类型筛选的唯一标签
@@ -678,61 +746,62 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.showGroupSubtotal = v; }),
       );
 
-    // 表格列数：滑块（左）+ 数字输入（右），两者联动
-    new Setting(this.tableOptionsContainer)
-      .setName(t("chartModal.tableColCount"))
-      .addSlider((slider) => {
-        this.colCountSlider = slider;
-        slider
-          .setLimits(1, MAX_TABLE_COLS, 1)
-          .setValue(this.tableColCount)
-          .setDynamicTooltip()
-          .onChange((v) => {
-            if (this.syncingColCount) return;
-            this.applyColCount(v);
-            this.scheduleRebuildColConfigs();
-          });
-      })
-      .addText((text) => {
-        this.colCountText = text;
-        const input = text.inputEl;
-        input.type = "number";
-        input.min = "1";
-        input.max = String(MAX_TABLE_COLS);
-        input.style.width = "3.5em";
-        text.setValue(String(this.tableColCount));
-        text.onChange((v) => {
-          if (this.syncingColCount) return;
-          const n = parseInt(v, 10);
-          if (!Number.isFinite(n)) return;
-          // 输入过程中只更新值、不重建，否则输入框会被销毁、焦点丢失
-          this.applyColCount(n);
-        });
-        // 失焦 / 回车时才重建列配置区
-        input.addEventListener("blur", () => this.rebuildColConfigs());
-        input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            this.rebuildColConfigs();
-            input.blur();
-          }
-        });
-      });
+    // 表格列数：原生 range（左）+ 数字输入（右）。
+    // 不用 Obsidian 的 addSlider —— 该组件会在滑块旁再显示一个数值，
+    // 与右侧输入框重复出现"两个数字"。
+    const countSetting = new Setting(this.tableOptionsContainer)
+      .setName(t("chartModal.tableColCount"));
+
+    const rangeEl = countSetting.controlEl.createEl("input", {
+      cls: "cashlog-col-count-slider",
+      attr: {
+        type: "range",
+        min: "1",
+        max: String(MAX_TABLE_COLS),
+        step: "1",
+        value: String(this.tableColCount),
+      },
+    });
+    const numberEl = countSetting.controlEl.createEl("input", {
+      cls: "cashlog-col-count-input",
+      attr: {
+        type: "number",
+        min: "1",
+        max: String(MAX_TABLE_COLS),
+        value: String(this.tableColCount),
+      },
+    });
+
+    // 拖动滑块：实时写回输入框，并防抖重建列配置
+    rangeEl.addEventListener("input", () => {
+      const v = parseInt(rangeEl.value, 10);
+      if (!Number.isFinite(v)) return;
+      this.tableColCount = v;
+      numberEl.value = String(v);
+      this.scheduleRebuildColConfigs();
+    });
+
+    // 输入数字：只更新值与滑块位置，不重建（否则输入框会被销毁、焦点丢失）
+    numberEl.addEventListener("input", () => {
+      const v = parseInt(numberEl.value, 10);
+      if (!Number.isFinite(v)) return;
+      const clamped = Math.max(1, Math.min(MAX_TABLE_COLS, v));
+      this.tableColCount = clamped;
+      rangeEl.value = String(clamped);
+    });
+
+    // 失焦 / 回车时才重建列配置区
+    numberEl.addEventListener("blur", () => this.rebuildColConfigs());
+    numberEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        this.rebuildColConfigs();
+        numberEl.blur();
+      }
+    });
 
     // 列配置区：独立容器，改列数时只重建这一块
     this.colConfigContainer = this.tableOptionsContainer.createDiv({ cls: "cashlog-col-configs" });
     this.rebuildColConfigs();
-  }
-
-  // 应用新的列数：夹取范围并同步两个控件，但不重建 DOM
-  private applyColCount(value: number): void {
-    const clamped = Math.max(1, Math.min(MAX_TABLE_COLS, Math.floor(value)));
-    if (clamped === this.tableColCount) return;
-    this.tableColCount = clamped;
-
-    this.syncingColCount = true;
-    this.colCountSlider?.setValue(clamped);
-    this.colCountText?.setValue(String(clamped));
-    this.syncingColCount = false;
   }
 
   // 滑块连续拖动时防抖，避免每移动一格就重建整块列配置
@@ -845,20 +914,21 @@ export class ChartModal extends Modal {
   private buildBarChartOptions(): void {
     if (!this.chartOptionsContainer) return;
 
+    const dataGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupData"));
+
     // 图表标题
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.chartTitle"))
       .setDesc(t("chartModal.chartTitleDesc"))
       .addText((text) => {
         text.inputEl.addClass("cashlog-chart-input-full");
         text
-          .setPlaceholder(t("chartModal.chartTitlePlaceholder"))
           .setValue(this.chartTitle)
           .onChange((v) => { this.chartTitle = v; });
       });
 
     // X轴分组
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.xGroupBy"))
       .setDesc(t("chartModal.xGroupByDesc"))
       .addDropdown((dd) =>
@@ -875,7 +945,7 @@ export class ChartModal extends Modal {
       );
 
     // 子分组依据
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.splitBy"))
       .setDesc(t("chartModal.splitByBarDesc"))
       .addDropdown((dd) =>
@@ -898,27 +968,16 @@ export class ChartModal extends Modal {
       );
 
     // 子分组项选择区域（动态重建）
-    this.barSplitItemsContainer = this.chartOptionsContainer.createDiv();
+    this.barSplitItemsContainer = dataGroup.createDiv();
     this.rebuildBarSplitItemsUI();
 
+    const lookGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupAppearance"));
+
     // 图表尺寸
-    new Setting(this.chartOptionsContainer)
-      .setName(t("chartModal.chartSize"))
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.width"))
-          .setValue(String(this.chartWidth))
-          .onChange((v) => { this.chartWidth = parseInt(v); }),
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.height"))
-          .setValue(String(this.chartHeight))
-          .onChange((v) => { this.chartHeight = parseInt(v); }),
-      );
+    this.buildChartSizeSetting(lookGroup);
 
     // 显示选项
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLegend"))
       .addToggle((toggle) =>
         toggle
@@ -926,7 +985,7 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.chartShowLegend = v; }),
       );
 
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLabels"))
       .setDesc(t("chartModal.showLabelsBarDesc"))
       .addToggle((toggle) =>
@@ -1012,20 +1071,21 @@ export class ChartModal extends Modal {
   private buildLineChartOptions(): void {
     if (!this.chartOptionsContainer) return;
 
+    const dataGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupData"));
+
     // 图表标题
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.chartTitle"))
       .setDesc(t("chartModal.chartTitleDesc"))
       .addText((text) => {
         text.inputEl.addClass("cashlog-chart-input-full");
         text
-          .setPlaceholder(t("chartModal.chartTitlePlaceholderLine"))
           .setValue(this.chartTitle)
           .onChange((v) => { this.chartTitle = v; });
       });
 
     // X轴分组（仅时间维度）
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.xGroupBy"))
       .setDesc(t("chartModal.xGroupByDesc"))
       .addDropdown((dd) =>
@@ -1039,7 +1099,7 @@ export class ChartModal extends Modal {
       );
 
     // 子分组依据
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.splitBy"))
       .setDesc(t("chartModal.splitByLineDesc"))
       .addDropdown((dd) =>
@@ -1058,27 +1118,16 @@ export class ChartModal extends Modal {
       );
 
     // 子分组项选择区域（动态重建）
-    this.lineSplitItemsContainer = this.chartOptionsContainer.createDiv();
+    this.lineSplitItemsContainer = dataGroup.createDiv();
     this.rebuildLineSplitItemsUI();
 
+    const lookGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupAppearance"));
+
     // 图表尺寸
-    new Setting(this.chartOptionsContainer)
-      .setName(t("chartModal.chartSize"))
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.width"))
-          .setValue(String(this.chartWidth))
-          .onChange((v) => { this.chartWidth = parseInt(v); }),
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.height"))
-          .setValue(String(this.chartHeight))
-          .onChange((v) => { this.chartHeight = parseInt(v); }),
-      );
+    this.buildChartSizeSetting(lookGroup);
 
     // 显示选项
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLegend"))
       .addToggle((toggle) =>
         toggle
@@ -1086,7 +1135,7 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.chartShowLegend = v; }),
       );
 
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLabels"))
       .setDesc(t("chartModal.showLabelsLineDesc"))
       .addToggle((toggle) =>
@@ -1160,20 +1209,21 @@ export class ChartModal extends Modal {
   private buildPieChartOptions(): void {
     if (!this.chartOptionsContainer) return;
 
+    const dataGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupData"));
+
     // 图表标题
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.chartTitle"))
       .setDesc(t("chartModal.chartTitleDesc"))
       .addText((text) => {
         text.inputEl.addClass("cashlog-chart-input-full");
         text
-          .setPlaceholder(t("chartModal.chartTitlePlaceholderPie"))
           .setValue(this.chartTitle)
           .onChange((v) => { this.chartTitle = v; });
       });
 
     // 分组方式
-    new Setting(this.chartOptionsContainer)
+    new Setting(dataGroup)
       .setName(t("chartModal.pieGroupBy"))
       .setDesc(t("chartModal.pieGroupByDesc"))
       .addDropdown((dd) =>
@@ -1194,27 +1244,16 @@ export class ChartModal extends Modal {
       );
 
     // 数值类型（动态重建）
-    this.pieValueTypeContainer = this.chartOptionsContainer.createDiv();
+    this.pieValueTypeContainer = dataGroup.createDiv();
     this.rebuildPieValueTypeUI();
 
+    const lookGroup = this.createGroup(this.chartOptionsContainer, t("chartModal.groupAppearance"));
+
     // 图表尺寸
-    new Setting(this.chartOptionsContainer)
-      .setName(t("chartModal.chartSize"))
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.width"))
-          .setValue(String(this.chartWidth))
-          .onChange((v) => { this.chartWidth = parseInt(v); }),
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder(t("chartModal.height"))
-          .setValue(String(this.chartHeight))
-          .onChange((v) => { this.chartHeight = parseInt(v); }),
-      );
+    this.buildChartSizeSetting(lookGroup);
 
     // 显示选项
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLegend"))
       .addToggle((toggle) =>
         toggle
@@ -1222,7 +1261,7 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.chartShowLegend = v; }),
       );
 
-    new Setting(this.chartOptionsContainer)
+    new Setting(lookGroup)
       .setName(t("chartModal.showLabels"))
       .setDesc(t("chartModal.showLabelsPieDesc"))
       .addToggle((toggle) =>

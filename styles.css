@@ -1570,11 +1570,23 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
 
 .cashlog-col-config-title {
   margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
   font-weight: 600;
   color: var(--text-normal);
 }
+
+/* 列数选择器：原生 range + 数字框（原生控件不会额外显示数值） */
+.cashlog-col-count-slider {
+  flex: 1 1 auto;
+  min-width: 120px;
+  accent-color: var(--interactive-accent);
+}
+
+.cashlog-col-count-input {
+  flex: 0 0 auto;
+  width: 3.5em;
+}
+
+
 
 /* 列配置区容器：只承载列卡片，列数选择器在其上方 */
 .cashlog-col-configs {
