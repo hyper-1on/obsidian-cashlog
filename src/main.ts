@@ -65,13 +65,14 @@ export default class CashlogPlugin extends Plugin {
 
         // Obsidian 的「插入」「段落格式」等分组并不是 MenuItem 的子菜单，
         // 而是由 MenuItem.setSection 指定同一 section 前缀后，由 Obsidian 在渲染时
-        // 合并成一个可展开菜单。实测「插入」组的前缀为 selection.insert.*，
-        // 因此把「账目图表」归入该前缀即可让它出现在内置「插入」下。
+        // 合并成一个可展开菜单。实测「插入」组分为 selection.insert.basic 与
+        // selection.insert.advanced 两段；账目图表本质是代码块，因此归入 advanced，
+        // 与「代码块 / 数学块 / 新建数据库」并列。
         menu.addItem((item) =>
           item
             .setTitle(t("menu.chart"))
             .setIcon("chart-column")
-            .setSection("selection.insert.basic")
+            .setSection("selection.insert.advanced")
             .onClick(() => {
               new ChartModal(this.app, this, editor).open();
             }),
