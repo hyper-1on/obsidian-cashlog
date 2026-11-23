@@ -1499,6 +1499,38 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   border-color: var(--interactive-accent);
 }
 
+/* 图表弹窗 - 分组卡片（类型与标签 / 其他筛选条件 / 图表与输出） */
+.cashlog-modal-group {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+}
+
+.cashlog-modal-group-title {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--interactive-accent);
+  font-size: 1.02em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+/* 分组内的字段标签（如「类型」）。原先用空 Setting 行承载标题，
+   既占位又与复选框分离，改用普通标签更紧凑。 */
+.cashlog-modal-field-label {
+  margin: 8px 0 6px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+/* 图表弹窗容器：内容较多时限制高度并允许滚动 */
+.cashlog-chart-modal {
+  max-height: 78vh;
+  overflow-y: auto;
+}
+
 /* 图表表格 - 表格选项容器 */
 .cashlog-table-options {
   padding: 12px;
@@ -1526,11 +1558,27 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
 }
 
 /* 图表弹窗 - 列配置卡片 */
+/* 父容器 .cashlog-table-options 与该卡片原本同色，导致每列边界不可见；
+   改用对比底色 + 边框 + 标题分隔线，让每一列成为独立卡片。 */
 .cashlog-col-config-card {
-  margin-top: 8px;
-  padding: 8px;
-  background: var(--background-secondary);
-  border-radius: 4px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.cashlog-col-config-title {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+/* 列配置区容器：只承载列卡片，列数选择器在其上方 */
+.cashlog-col-configs {
+  margin-top: 4px;
 }
 
 /* 暗色主题适配 */

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { App, Editor, Modal, Notice, Setting } from "obsidian";
+import { App, Editor, Modal, Notice, Setting, SliderComponent, TextComponent } from "obsidian";
 import type CashlogPlugin from "./main";
 import type { CashlogEntry } from "./CashlogEntry";
+import { MAX_TABLE_COLS } from "./Query/Query";
 import { t, tp } from "./i18n";
 
 // 图表类型
@@ -48,6 +49,15 @@ export class ChartModal extends Modal {
 
   // 表格选项
   private tableColCount: number = 6;
+  // 列配置区容器：只重建这一块，避免改列数时把列数选择器自身也销毁
+  private colConfigContainer: HTMLElement | null = null;
+  // 列数选择器的两个控件（滑块 + 数字），需要互相同步
+  private colCountSlider: SliderComponent | null = null;
+  private colCountText: TextComponent | null = null;
+  // 列配置重建的防抖定时器（滑块连续拖动时只重建一次）
+  private colCountRebuildTimer: number | null = null;
+  // 防止滑块与数字框互相 setValue 触发 onChange 造成回环
+  private syncingColCount = false;
   private tableCols: Array<{
     field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
     header: string;
@@ -107,14 +117,13 @@ export class ChartModal extends Modal {
     contentEl.addClass("cashlog-modal");
     contentEl.addClass("cashlog-chart-modal");
 
-    // === 过滤条件 ===
-    new Setting(contentEl).setName(t("chartModal.filterSection")).setHeading();
+    // ========== 组 1：类型与标签 ==========
+    const filterGroup = this.createGroup(contentEl, t("chartModal.groupTypeTags"));
 
     // 类型（多选复选框）
-    new Setting(contentEl)
-      .setName(t("chartModal.typeFilter"));
+    filterGroup.createEl("div", { cls: "cashlog-modal-field-label", text: t("chartModal.typeFilter") });
 
-    const typeContainer = contentEl.createDiv({
+    const typeContainer = filterGroup.createDiv({
       cls: "cashlog-checkbox-list",
     });
 
@@ -165,7 +174,7 @@ export class ChartModal extends Modal {
     });
 
     // 标签区域（类型变更时重建）
-    const tagSection = contentEl.createDiv({ cls: "cashlog-tag-section" });
+    const tagSection = filterGroup.createDiv({ cls: "cashlog-tag-section" });
     const rebuildTags = () => {
       tagSection.empty();
       const allTags = this.getUniqueTags();
@@ -202,8 +211,11 @@ export class ChartModal extends Modal {
     };
     rebuildTags();
 
+    // ========== 组 2：其他筛选条件 ==========
+    const conditionGroup = this.createGroup(contentEl, t("chartModal.groupConditions"));
+
     // 描述包含
-    new Setting(contentEl)
+    new Setting(conditionGroup)
       .setName(t("chartModal.descFilter"))
       .setDesc(t("chartModal.descFilterDesc"))
       .addText((text) =>
@@ -214,8 +226,7 @@ export class ChartModal extends Modal {
       );
 
     // 金额范围
-    contentEl.createDiv({ cls: "cashlog-field-row", attr: { style: "display:flex;gap:8px;align-items:center;margin-bottom:8px;" } });
-    new Setting(contentEl)
+    new Setting(conditionGroup)
       .setName(t("chartModal.amountRange"))
       .setDesc(t("chartModal.amountRangeDesc"))
       .addText((text) =>
@@ -232,7 +243,7 @@ export class ChartModal extends Modal {
       );
 
     // 日期范围（原生日期选择器）
-    new Setting(contentEl)
+    new Setting(conditionGroup)
       .setName(t("chartModal.dateRange"))
       .setDesc(t("chartModal.dateRangeDesc"))
       .addText((text) => {
@@ -247,7 +258,7 @@ export class ChartModal extends Modal {
       });
 
     // 路径包含
-    new Setting(contentEl)
+    new Setting(conditionGroup)
       .setName(t("chartModal.pathFilter"))
       .setDesc(t("chartModal.pathFilterDesc"))
       .addText((text) =>
@@ -257,10 +268,10 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.pathFilter = v; }),
       );
 
-    // === 图表类型 ===
-    new Setting(contentEl).setName(t("chartModal.chartTypeSection")).setHeading();
+    // ========== 组 3：图表与输出 ==========
+    const chartGroup = this.createGroup(contentEl, t("chartModal.groupChart"));
 
-    new Setting(contentEl)
+    new Setting(chartGroup)
       .setName(t("chartModal.selectType"))
       .addDropdown((dd) =>
         dd
@@ -277,14 +288,14 @@ export class ChartModal extends Modal {
       );
 
     // === 表格选项（仅当选择表格时显示）===
-    this.tableOptionsContainer = contentEl.createDiv({
+    this.tableOptionsContainer = chartGroup.createDiv({
       cls: "cashlog-table-options",
     });
     this.tableOptionsContainer.addClass("hidden");
     this.buildTableOptionsUI();
 
     // === 图表选项（仅当选择图表时显示）===
-    this.chartOptionsContainer = contentEl.createDiv({
+    this.chartOptionsContainer = chartGroup.createDiv({
       cls: "cashlog-chart-options",
     });
     this.chartOptionsContainer.addClass("hidden");
@@ -314,6 +325,14 @@ export class ChartModal extends Modal {
 
   onClose() {
     this.contentEl.empty();
+  }
+
+  // 创建一个分组卡片：标题在外层，返回内部内容容器。
+  // 分组容器同时是未来重做 UI（如改成选项卡）时的 section 雏形。
+  private createGroup(container: HTMLElement, title: string): HTMLElement {
+    const group = container.createDiv({ cls: "cashlog-modal-group" });
+    group.createDiv({ cls: "cashlog-modal-group-title", text: title });
+    return group.createDiv({ cls: "cashlog-modal-group-body" });
   }
 
   // 从缓存中提取匹配当前类型筛选的唯一标签
@@ -659,26 +678,83 @@ export class ChartModal extends Modal {
           .onChange((v) => { this.showGroupSubtotal = v; }),
       );
 
-    // 表格列数
+    // 表格列数：滑块（左）+ 数字输入（右），两者联动
     new Setting(this.tableOptionsContainer)
       .setName(t("chartModal.tableColCount"))
-      .addDropdown((dd) =>
-        dd
-          .addOption("1", "1")
-          .addOption("2", "2")
-          .addOption("3", "3")
-          .addOption("4", "4")
-          .addOption("5", "5")
-          .addOption("6", "6")
-          .setValue(String(this.tableColCount))
+      .addSlider((slider) => {
+        this.colCountSlider = slider;
+        slider
+          .setLimits(1, MAX_TABLE_COLS, 1)
+          .setValue(this.tableColCount)
+          .setDynamicTooltip()
           .onChange((v) => {
-            this.tableColCount = parseInt(v);
-            // 仅重建 UI，不重置列配置数据
-            this.buildTableOptionsUI();
-          }),
-      );
+            if (this.syncingColCount) return;
+            this.applyColCount(v);
+            this.scheduleRebuildColConfigs();
+          });
+      })
+      .addText((text) => {
+        this.colCountText = text;
+        const input = text.inputEl;
+        input.type = "number";
+        input.min = "1";
+        input.max = String(MAX_TABLE_COLS);
+        input.style.width = "3.5em";
+        text.setValue(String(this.tableColCount));
+        text.onChange((v) => {
+          if (this.syncingColCount) return;
+          const n = parseInt(v, 10);
+          if (!Number.isFinite(n)) return;
+          // 输入过程中只更新值、不重建，否则输入框会被销毁、焦点丢失
+          this.applyColCount(n);
+        });
+        // 失焦 / 回车时才重建列配置区
+        input.addEventListener("blur", () => this.rebuildColConfigs());
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            this.rebuildColConfigs();
+            input.blur();
+          }
+        });
+      });
 
-    // 列配置
+    // 列配置区：独立容器，改列数时只重建这一块
+    this.colConfigContainer = this.tableOptionsContainer.createDiv({ cls: "cashlog-col-configs" });
+    this.rebuildColConfigs();
+  }
+
+  // 应用新的列数：夹取范围并同步两个控件，但不重建 DOM
+  private applyColCount(value: number): void {
+    const clamped = Math.max(1, Math.min(MAX_TABLE_COLS, Math.floor(value)));
+    if (clamped === this.tableColCount) return;
+    this.tableColCount = clamped;
+
+    this.syncingColCount = true;
+    this.colCountSlider?.setValue(clamped);
+    this.colCountText?.setValue(String(clamped));
+    this.syncingColCount = false;
+  }
+
+  // 滑块连续拖动时防抖，避免每移动一格就重建整块列配置
+  private scheduleRebuildColConfigs(): void {
+    if (this.colCountRebuildTimer !== null) window.clearTimeout(this.colCountRebuildTimer);
+    this.colCountRebuildTimer = window.setTimeout(() => {
+      this.colCountRebuildTimer = null;
+      this.rebuildColConfigs();
+    }, 150);
+  }
+
+  // 重建列配置卡片区（不含列数选择器本身）
+  private rebuildColConfigs(): void {
+    const container = this.colConfigContainer;
+    if (!container) return;
+    container.empty();
+
+    // 列数可能超过默认的 6 个配置，先补齐，避免取到 undefined
+    while (this.tableCols.length < this.tableColCount) {
+      this.tableCols.push({ field: "date", header: "", align: "left" });
+    }
+
     const fields = [
       { value: "date" as const, label: t("chartModal.field.date") },
       { value: "amount" as const, label: t("chartModal.field.amount") },
@@ -691,11 +767,11 @@ export class ChartModal extends Modal {
 
     for (let i = 0; i < this.tableColCount; i++) {
       const col = this.tableCols[i];
-      const colContainer = this.tableOptionsContainer.createDiv({
+      const colContainer = container.createDiv({
         cls: "cashlog-col-config-card",
       });
 
-      colContainer.createEl("strong", { text: tp("chartModal.colPrefix", { n: i + 1 }) });
+      colContainer.createDiv({ cls: "cashlog-col-config-title", text: tp("chartModal.colPrefix", { n: i + 1 }) });
 
       // 显示数据
       new Setting(colContainer)
@@ -742,7 +818,6 @@ export class ChartModal extends Modal {
             }),
         );
     }
-
   }
 
   // 构建图表选项 UI（根据类型分派）

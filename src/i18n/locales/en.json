@@ -126,6 +126,9 @@
   "cashlogModal.remove": "✕",
 
   "chartModal.title": "Insert Chart",
+  "chartModal.groupTypeTags": "Type & Tags",
+  "chartModal.groupConditions": "Other Filters",
+  "chartModal.groupChart": "Chart & Output",
   "chartModal.filterSection": "Filters",
   "chartModal.typeFilter": "Type",
   "chartModal.all": "All",

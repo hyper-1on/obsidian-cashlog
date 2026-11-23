@@ -126,6 +126,9 @@
   "cashlogModal.remove": "✕",
 
   "chartModal.title": "插入图表",
+  "chartModal.groupTypeTags": "类型与标签",
+  "chartModal.groupConditions": "其他筛选条件",
+  "chartModal.groupChart": "图表与输出",
   "chartModal.filterSection": "过滤条件",
   "chartModal.typeFilter": "类型",
   "chartModal.all": "全部",

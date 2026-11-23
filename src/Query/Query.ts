@@ -34,8 +34,8 @@ export function createDefaultTableConfig(): TableConfig {
   };
 }
 
-// 表格列数上限
-export const MAX_TABLE_COLS = 6;
+// 表格列数上限（column 顺序式与 colN 下标式共用）
+export const MAX_TABLE_COLS = 12;
 
 // 图表 / 面板共用调色板。
 // 分两个常量是因为：图表默认用 10 色、面板饼图用满 20 色，且两者历史顺序不同
