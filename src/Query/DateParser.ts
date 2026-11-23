@@ -57,7 +57,8 @@ export class DateParser {
 
   // 解析编号日期范围：YYYY、YYYY-mm、YYYY-Www、YYYY-Qq
   private static parseNumberedDateRange(input: string, _forwardDate: boolean): DateRange {
-    const patterns: [RegExp, string, moment.unitOfTime.StartOf][] = [
+    // 这里只会传具体单位；moment 的 StartOf 含 null，会把类型污染成 string | null
+      const patterns: [RegExp, string, string][] = [
       [/^\s*\d{4}\s*$/, "YYYY", "year"],
       [/^\s*\d{4}-Q[1-4]\s*$/i, "YYYY-Q", "quarter"],
       [/^\s*\d{4}-\d{2}\s*$/, "YYYY-MM", "month"],

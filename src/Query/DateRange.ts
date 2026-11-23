@@ -23,7 +23,8 @@ export class DateRange {
 
   // 构建相对日期范围（this week/month/quarter/year）
   static buildRelative(range: moment.unitOfTime.StartOf): DateRange {
-    const unitOfTime = range === "week" ? "isoWeek" : range;
+    // StartOf 类型包含 null；这里的调用方只会传具体单位
+    const unitOfTime = (range === "week" ? "isoWeek" : range) as string;
     return new DateRange(
       moment().startOf(unitOfTime).startOf("day"),
       moment().endOf(unitOfTime).startOf("day"),

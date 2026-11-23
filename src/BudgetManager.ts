@@ -27,7 +27,7 @@ export interface GoalProgress {
 }
 
 // 周期类型（合并了 StatsMode 和 Budget period）
-export type PeriodType = BudgetConfig["period"] | "day" | "all";
+export type PeriodType = BudgetConfig["period"] | "day" | "week" | "month" | "year" | "all";
 
 // 根据周期类型计算日期范围（Dashboard 和 Budget 共用）
 export function computePeriodRange(
