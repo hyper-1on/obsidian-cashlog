@@ -12,7 +12,7 @@ import { AttachmentManager } from "./AttachmentManager";
 import { AccountManager } from "./AccountManager";
 import { BudgetManager } from "./BudgetManager";
 import { CashlogView, CASHLOG_VIEW_TYPE } from "./CashlogView";
-import { initI18n, tp } from "./i18n";
+import { initI18n, t, tp } from "./i18n";
 
 export default class CashlogPlugin extends Plugin {
   settings: CashlogSettings = createDefaultSettings();
