@@ -13,7 +13,7 @@ import { AttachmentManager } from "./AttachmentManager";
 import { AccountManager } from "./AccountManager";
 import { BudgetManager } from "./BudgetManager";
 import { CashlogView, CASHLOG_VIEW_TYPE } from "./CashlogView";
-import { initI18n, t, tp } from "./i18n";
+import { initI18n, t, tp, setCurrencyOverride } from "./i18n";
 
 export default class CashlogPlugin extends Plugin {
   settings: CashlogSettings = createDefaultSettings();
@@ -171,9 +171,13 @@ export default class CashlogPlugin extends Plugin {
     // 就地修改（例如新增账户）会永久污染默认值，使「恢复默认」失效。
     this.settings = Object.assign(createDefaultSettings(), loaded ?? {});
     this.cache?.updateSettings(this.settings);
+    // 应用货币符号设置（空表示跟随当前语言默认）
+    setCurrencyOverride(this.settings.currencySymbol);
   }
 
   async saveSettings() {
+    // 设置变更后立即生效：货币符号不需要等下次重载
+    setCurrencyOverride(this.settings.currencySymbol);
     await this.saveData(this.settings);
     this.events.trigger("cashlog-render-refresh");
   }

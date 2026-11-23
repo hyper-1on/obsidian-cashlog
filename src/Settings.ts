@@ -55,6 +55,9 @@ export interface CashlogSettings {
   statsMode: "day" | "week" | "month" | "year" | "all";
   statsMonthStartDay: number;
   statsWeekStartDay: number;
+
+  // 货币符号覆盖：空字符串表示使用当前语言的默认符号
+  currencySymbol: string;
 }
 
 export const DEFAULT_SETTINGS: CashlogSettings = {
@@ -89,6 +92,9 @@ export const DEFAULT_SETTINGS: CashlogSettings = {
   statsMode: "month",
   statsMonthStartDay: 1,
   statsWeekStartDay: 1,
+
+  // 空表示跟随语言默认（zh-CN → ¥，en → $）
+  currencySymbol: "",
 };
 
 // 返回一份全新的默认设置。

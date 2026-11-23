@@ -272,6 +272,20 @@ export class CashlogSettingsTab extends PluginSettingTab {
     // ===== 高级设置 =====
     new Setting(containerEl).setName(t("settings.section.advanced")).setHeading();
 
+    // 货币符号：留空则跟随当前语言（zh-CN → ¥，en → $）
+    new Setting(containerEl)
+      .setName(t("settings.currencySymbol.name"))
+      .setDesc(t("settings.currencySymbol.desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder(t("settings.currencySymbol.placeholder"))
+          .setValue(this.plugin.settings.currencySymbol)
+          .onChange((value) => {
+            this.plugin.settings.currencySymbol = value;
+            this.plugin.saveSettingsDebounced();
+          }),
+      );
+
     new Setting(containerEl)
       .setName(t("settings.showEditButton.name"))
       .setDesc(t("settings.showEditButton.desc"))

@@ -34,6 +34,29 @@
 
 ## 记录
 
+## [2026-11-23] 多语言端口化：LocaleProfile 与货币符号覆盖
+
+- **类型**：重构（行为不变）+ 特性（货币符号可覆盖）
+- **动机**：
+  - 原实现把语言判断、翻译表、货币符号混在同一个文件里，且都是二元硬编码
+    （`isZhLang` 把所有 `zh*` 映射到 `zh-CN`；`getCurrencySymbol` 只有 `$` / `¥`）
+  - 新增语言要改多处逻辑，而不是只加一份翻译数据
+  - 货币符号被绑死在语言上，但「中文界面 + 记美元」是真实场景
+- **改动**：
+  - 新增 `i18n/LocaleProfile.ts`：一种语言 = 一份 profile
+    （`code` / `aliases` / `currencySymbol` / `strings`）
+  - `initI18n` 改为注册 profile 表 + 别名解析 + 同族回退
+    （`zh-TW` → `zh-CN`，未注册语言 → `en`）
+  - 货币符号改为「profile 默认 + 设置覆盖」，新增 `setCurrencyOverride()`
+  - 设置页新增「货币符号」输入项（留空跟随语言）
+  - `t` / `tp` / `formatMoney` 等调用方签名完全不变
+- **涉及文件**：`src/i18n/LocaleProfile.ts`（新）、`src/i18n/i18n.ts`、
+  `src/i18n/index.ts`、`src/Settings.ts`、`src/main.ts`、`src/SettingsTab.ts`、
+  两个语言包
+- **影响**：
+  - 新增语言只需在 `initI18n` 里加一份 profile，无需改动任何调用方
+  - 旧行为保持一致（`zh*` → 简体、其他 → 英文），只是集中到一处
+
 ## [2026-11-23] 编辑器右键菜单：记账 + 账目图表（挂进内置「插入」）
 
 - **类型**：特性

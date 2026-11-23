@@ -1,46 +1,85 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 // 国际化翻译引擎
+//
+// 一种语言 = 一份 LocaleProfile（见 ./LocaleProfile.ts）。
+// 新增语言只需在 initI18n 里 registerLocale 一份 profile，
+// t / tp / formatMoney / getCurrencySymbol 的调用方完全不用改。
 import zhCN from "./locales/zh-CN.json";
 import en from "./locales/en.json";
+import type { LocaleProfile } from "./LocaleProfile";
 
 type StringMap = Record<string, string>;
 
-// 支持的语言包（后续添加新语言时在这里注册）
-const localeMap: Record<string, StringMap> = {};
-let currentLocale: string = "zh-CN";
-let currentStrings: StringMap = zhCN as StringMap;
+// code 与所有别名都指向同一份 profile
+const profileIndex = new Map<string, LocaleProfile>();
+const profileList: LocaleProfile[] = [];
 
-// 注册语言包
-function registerLocale(locale: string, strings: StringMap): void {
-  localeMap[locale] = strings;
-}
+let current: LocaleProfile | null = null;
+let fallback: LocaleProfile | null = null;
 
-// 判断是否为中文语言
-function isZhLang(lang: string): boolean {
-  const lower = lang.toLowerCase();
-  return lower.startsWith("zh");
-}
+// 用户在设置里指定的货币符号；空表示使用语言默认值
+let currencyOverride: string | null = null;
 
-// 初始化：自动检测用户语言
-export function initI18n(): void {
-  // 注册语言包
-  registerLocale("zh-CN", zhCN as StringMap);
-  registerLocale("en", en as StringMap);
-
-  // 优先使用 moment locale（反映 Obsidian 的语言设置）
-  const momentLocale = (window as unknown as { moment?: { locale?: () => string } }).moment?.locale?.() || "";
-  if (momentLocale) {
-    currentLocale = isZhLang(momentLocale) ? "zh-CN" : "en";
-  } else {
-    // 回退到浏览器语言
-    currentLocale = isZhLang(navigator.language) ? "zh-CN" : "en";
+function registerLocale(profile: LocaleProfile): void {
+  profileList.push(profile);
+  profileIndex.set(profile.code.toLowerCase(), profile);
+  for (const alias of profile.aliases) {
+    profileIndex.set(alias.toLowerCase(), profile);
   }
-  currentStrings = currentLocale === "zh-CN" ? (zhCN as StringMap) : (en as StringMap);
 }
 
-// 简单翻译
+// 把语言标识（zh-Hant、en-GB 等）解析成已注册的 profile
+function resolveLocale(lang: string): LocaleProfile | null {
+  const lower = (lang || "").toLowerCase();
+  if (!lower) return null;
+
+  // 1) 精确命中（含别名）
+  const exact = profileIndex.get(lower);
+  if (exact) return exact;
+
+  // 2) 前缀命中：zh-Hant 落回同语言族已注册的第一个 profile
+  const prefix = lower.split("-")[0];
+  for (const profile of profileList) {
+    if (profile.code.toLowerCase().startsWith(`${prefix}-`)) return profile;
+    if (profile.aliases.some((a) => a.toLowerCase().startsWith(`${prefix}-`))) return profile;
+  }
+  return null;
+}
+
+// 初始化：注册语言包并检测用户语言。
+// detectedLang 仅用于测试与显式指定；省略时按 moment locale → 浏览器语言 的顺序检测。
+export function initI18n(detectedLang?: string): void {
+  registerLocale({
+    code: "zh-CN",
+    aliases: ["zh", "zh-hans", "zh-hans-cn"],
+    currencySymbol: "¥",
+    strings: zhCN as StringMap,
+  });
+  registerLocale({
+    code: "en",
+    aliases: ["en-us", "en-gb", "en-au", "en-ca"],
+    currencySymbol: "$",
+    strings: en as StringMap,
+  });
+
+  fallback = profileIndex.get("en") ?? profileList[0] ?? null;
+
+  // moment locale 反映 Obsidian 的语言设置，优先；否则退到浏览器语言
+  const momentLocale =
+    (window as unknown as { moment?: { locale?: () => string } }).moment?.locale?.() || "";
+  const detected = detectedLang ?? (momentLocale || navigator.language || "");
+  current = resolveLocale(detected) ?? fallback;
+}
+
+// 首次使用前确保已初始化（测试环境不一定显式调用 initI18n）
+function ensureInitialized(): void {
+  if (!current) initI18n();
+}
+
+// 简单翻译：当前语言 → 英文回退 → key 本身
 export function t(key: string): string {
-  return currentStrings[key] ?? (zhCN as StringMap)[key] ?? key;
+  ensureInitialized();
+  return current?.strings[key] ?? fallback?.strings[key] ?? key;
 }
 
 // 带插值的翻译（替换 {name} 占位符）
@@ -52,20 +91,28 @@ export function tp(key: string, params: Record<string, string | number>): string
   return str;
 }
 
-// 获取当前语言
+// 当前语言的标识
 export function getLocale(): string {
-  return currentLocale;
+  ensureInitialized();
+  return current?.code ?? "en";
 }
 
-// 当前语言使用的货币符号
+// 当前使用的货币符号：设置覆盖优先，否则用语言默认
 export function getCurrencySymbol(): string {
-  return currentLocale === "en" ? "$" : "¥";
+  ensureInitialized();
+  return currencyOverride || current?.currencySymbol || "¥";
 }
 
-// 格式化金额（根据当前语言环境）
+// 设置货币符号覆盖；传空字符串或 null 表示恢复语言默认
+export function setCurrencyOverride(symbol: string | null): void {
+  currencyOverride = symbol && symbol.trim() ? symbol.trim() : null;
+}
+
+// 格式化金额（按当前语言环境）
 export function formatMoney(value: number): string {
+  ensureInitialized();
   const abs = Math.abs(value);
-  const formatted = abs.toLocaleString(currentLocale, {
+  const formatted = abs.toLocaleString(current?.code ?? "en", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -75,7 +122,8 @@ export function formatMoney(value: number): string {
 
 // 格式化无符号金额
 export function formatMoneyUnsigned(value: number): string {
-  return value.toLocaleString(currentLocale, {
+  ensureInitialized();
+  return value.toLocaleString(current?.code ?? "en", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
