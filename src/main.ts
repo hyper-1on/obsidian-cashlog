@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { Events, MarkdownRenderChild, Menu, Plugin, TFile } from "obsidian";
+import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
 import { CashlogSettings, createDefaultSettings } from "./Settings";
 import { CashlogSettingsTab } from "./SettingsTab";
 import { addCommands, createOrEdit } from "./Commands";
@@ -63,19 +63,19 @@ export default class CashlogPlugin extends Plugin {
             }),
         );
 
-        const addChartItem = (target: Menu): void => {
-          target.addItem((sub) =>
-            sub
-              .setTitle(t("menu.chart"))
-              .setIcon("chart-column")
-              .onClick(() => {
-                new ChartModal(this.app, this, editor).open();
-              }),
-          );
-        };
-
-        const builtinInsert = findBuiltinInsertMenu(menu);
-        addChartItem(builtinInsert ?? menu);
+        // Obsidian 的「插入」「段落格式」等分组并不是 MenuItem 的子菜单，
+        // 而是由 MenuItem.setSection 指定同一 section 前缀后，由 Obsidian 在渲染时
+        // 合并成一个可展开菜单。实测「插入」组的前缀为 selection.insert.*，
+        // 因此把「账目图表」归入该前缀即可让它出现在内置「插入」下。
+        menu.addItem((item) =>
+          item
+            .setTitle(t("menu.chart"))
+            .setIcon("chart-column")
+            .setSection("selection.insert.basic")
+            .onClick(() => {
+              new ChartModal(this.app, this, editor).open();
+            }),
+        );
       }),
     );
 
@@ -352,40 +352,6 @@ export default class CashlogPlugin extends Plugin {
       });
     }
   }
-}
-
-// 找到 Obsidian 内置的「插入」子菜单。
-//
-// Menu.items / MenuItem.submenu 属于运行时结构，不在公开类型里（公开 API 只有
-// Menu.addItem 与 MenuItem.setSubmenu，都无法读取「已存在的」子菜单），因此这里
-// 用 any 访问，拿不到就返回 null、由调用方回退到一级菜单 —— 宁可退化也不报错。
-// 内置项标题随界面语言变化，这里覆盖常见几种；匹配不到只是回退，不会影响其他功能。
-function findBuiltinInsertMenu(menu: Menu): Menu | null {
-  const raw = menu as unknown as { items?: unknown };
-  const items = Array.isArray(raw.items) ? (raw.items as unknown[]) : null;
-
-  // 诊断：输出每一项的字段名。
-  // 实测 MenuItem.title 为 undefined，且 27 项里只有 1 项带 submenu，
-  // 而界面上有「文本格式 / 段落格式 / 插入」三个可展开项 —— 说明另外两个的
-  // 子菜单不挂在 submenu 字段上。这里先把每项的字段名打出来，确认后再改匹配逻辑。
-  try {
-    if (!items) {
-      console.log("[cashlog] menu.items 不是数组:", typeof raw.items);
-    } else {
-      const lines = items.map((it, i) => {
-        const keys =
-          it && typeof it === "object" ? Object.keys(it as Record<string, unknown>) : [];
-        return `${i}: ${keys.join("|")}`;
-      });
-      console.log("[cashlog] menu items keys:\n" + lines.join("\n"));
-    }
-  } catch (err) {
-    console.log("[cashlog] 菜单诊断失败:", err);
-  }
-
-  // 在确认「插入」的真实字段之前不做猜测：回退到一级菜单，
-  // 避免把项挂进「文本格式」这种错误的子菜单里。
-  return null;
 }
 
 // 代码块渲染子组件，支持自动刷新
