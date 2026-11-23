@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
+import { Events, MarkdownRenderChild, Menu, Plugin, TFile } from "obsidian";
 import { CashlogSettings, createDefaultSettings } from "./Settings";
 import { CashlogSettingsTab } from "./SettingsTab";
 import { addCommands, createOrEdit } from "./Commands";
@@ -47,10 +47,11 @@ export default class CashlogPlugin extends Plugin {
       void this.activateCashlogPanel();
     });
 
-    // 编辑器右键菜单：记账（一级）与「插入 → 账目图表」（二级）。
-    // 放在右键而不是 ribbon —— 两个命令都依赖「光标所在行」，
-    // 右键不会移动焦点，editor.getCursor() 才是用户真正想操作的那一行。
-    // 图表收进「插入」子菜单里，避免和 Obsidian 自带的表格操作混淆。
+    // 编辑器右键菜单。
+    // 一级保留「创建/编辑记账」；「账目图表」优先挂进 Obsidian 内置的「插入」
+    // 子菜单（与插入链接/表格/Callout 等并列），拿不到内置子菜单时回退到一级。
+    // 两个动作都依赖「光标所在行」，所以放右键而不是 ribbon：
+    // 右键不移动焦点，editor.getCursor() 才是用户真正想操作的那一行。
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
         menu.addItem((item) =>
@@ -62,10 +63,8 @@ export default class CashlogPlugin extends Plugin {
             }),
         );
 
-        menu.addItem((item) => {
-          item.setTitle(t("menu.insert")).setIcon("plus");
-          const submenu = item.setSubmenu();
-          submenu.addItem((sub) =>
+        const addChartItem = (target: Menu): void => {
+          target.addItem((sub) =>
             sub
               .setTitle(t("menu.chart"))
               .setIcon("chart-column")
@@ -73,7 +72,10 @@ export default class CashlogPlugin extends Plugin {
                 new ChartModal(this.app, this, editor).open();
               }),
           );
-        });
+        };
+
+        const builtinInsert = findBuiltinInsertMenu(menu);
+        addChartItem(builtinInsert ?? menu);
       }),
     );
 
@@ -350,6 +352,26 @@ export default class CashlogPlugin extends Plugin {
       });
     }
   }
+}
+
+// 找到 Obsidian 内置的「插入」子菜单。
+//
+// Menu.items / MenuItem.submenu 属于运行时结构，不在公开类型里（公开 API 只有
+// Menu.addItem 与 MenuItem.setSubmenu，都无法读取「已存在的」子菜单），因此这里
+// 用 any 访问，拿不到就返回 null、由调用方回退到一级菜单 —— 宁可退化也不报错。
+// 内置项标题随界面语言变化，这里覆盖常见几种；匹配不到只是回退，不会影响其他功能。
+function findBuiltinInsertMenu(menu: Menu): Menu | null {
+  const insertTitles = new Set(["插入", "insert", "вставить"]);
+  const items = (
+    menu as unknown as { items?: Array<{ title?: unknown; submenu?: Menu }> }
+  ).items;
+  if (!Array.isArray(items)) return null;
+
+  for (const item of items) {
+    const title = typeof item.title === "string" ? item.title.trim().toLowerCase() : "";
+    if (insertTitles.has(title) && item.submenu) return item.submenu;
+  }
+  return null;
 }
 
 // 代码块渲染子组件，支持自动刷新
