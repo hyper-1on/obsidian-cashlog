@@ -269,6 +269,44 @@
 - 命令 ID、设置键、代码块语言均未改变
 - 修复刻意保持窄范围：重构、死代码清理与性能工作分开提交
 
+## 测试覆盖
+
+全部修复的回归测试位于 **`tests/regression.test.ts`**（88 条），在仓库内直接运行：
+
+```bash
+npm test
+```
+
+测试名带标签，与本文档的条目对应：
+
+| 标签 | 含义 |
+|---|---|
+| `[卡n]` | 用户验收清单第 n 张卡 |
+| `[Bugn]` | 第 5 轮复现的缺陷编号 |
+| `[FIX-n]` | 2026-11 修复批编号 |
+| `[发现n]` | 代码审查发现项 |
+| `[i18n]` / `[冒烟]` | 国际化 / 插件加载期完整性 |
+| `[对照]` | 反向断言：同一行为的"未修复时应如此"，防止修 A 坏 B |
+
+代表性对应关系（缺陷 → 修复位置 → 测试）：
+
+| 缺陷 | 修复位置 | 测试用例 |
+|---|---|---|
+| §1.1 编辑「余额变更」使余额偏移 | `src/EntryEditor.ts` | `[卡6] 编辑余额变更条目时不应把自身旧 delta 重复计入` |
+| §1.3 写回时信任过期行号 | `src/EntryLocator.ts` | `[卡9] 写入前应在最新文件内容中重新定位条目行` |
+| §1.5 无金额条目不可见 | `src/CashlogSerializer.ts` / `EntryEditor.ts` | `[卡3] 无金额的普通条目应被提交校验拦下` |
+| §1.7 围栏代码块被索引 | `src/Cache.ts` | `[反馈] 围栏代码块内的示例条目不应被索引` |
+| §2.1 `account is not <name>` 不可达 | `src/Query/FilterParser.ts` | `[卡5] account is not 应排除指定账户` |
+| §2.2 `show total income` 失效 | `src/Query/Query.ts` | `[卡2] show total income 只应启用总收入汇总` |
+| §3.1 `hide account` / `show account` 无效 | `src/ChartRenderer.ts` | `[Bug1] hide account 应省略账户名、保留金额` |
+| §3.3 `colN` 表头含转义引号 | `src/Query/Query.ts` | `[Bug4] colN 表头含转义双引号时应能解析并还原` |
+| §4.10 刷新时面板滚动跳回顶部 | `src/CashlogView.ts` | `[端到端] 打开面板设置 → 重建 → 结构完整且滚动位置保持` |
+| §5.1 `cashlog-chart` 不消费显示控制 | `src/ChartRenderer.ts` | `[FIX-6] hide amount 应移除表格的金额列` |
+| §7 国际化 | `src/i18n/i18n.ts` | `[i18n] 语言检测 / 货币符号 / 回退链` |
+
+> 新增缺陷时请在 `tests/regression.test.ts` 补一条带标签的用例，
+> 并把「修复位置 → 测试」补进上表。
+
 ## 已知未修
 
 | 项 | 说明 |

@@ -7,7 +7,8 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "lint": "jiti scripts/lint.ts",
-    "lint:fix": "jiti scripts/lint-fix.ts"
+    "lint:fix": "jiti scripts/lint-fix.ts",
+    "test": "node tests/build.mjs && node tests/dist/tests.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

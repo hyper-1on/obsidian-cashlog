@@ -34,6 +34,27 @@
 
 ## 记录
 
+## [2026-11-23] 测试基建入库：tests/ + npm test
+
+- **类型**：工程
+- **动机**：
+  - 88 条回归测试原先放在仓库外的 `test-harness/`，克隆仓库拿不到，
+    换机或误删即全部丢失
+  - 仓库本身没有任何测试目录与测试框架
+- **改动**：
+  - 新建仓库内 `tests/`，使用 Node 内置 test runner（零新增依赖）：
+    - `tests/regression.test.ts` —— 88 条回归用例，按 `[FIX-n]` / `[Bug-n]` /
+      `[卡n]` / `[i18n]` / `[冒烟]` 标签分组，每条标签即对应的修复意图
+    - `tests/stubs/obsidian.ts`、`tests/stubs/dom.ts` —— Obsidian API 与 DOM 桩
+    - `tests/fixtures/PanelSettings.before.ts` —— 差分测试基线（修复前快照）
+    - `tests/build.mjs` —— esbuild 打包，把 `obsidian` 别名到本地桩
+  - `package.json` 新增 `npm test`
+  - `.gitignore` 排除 `tests/dist/`
+- **隐私**：测试数据全部为构造样例（`测试` / `示例一` / `a` / `b` / `c`，
+  金额为 10/50/100 等整数；账户名取自 `DEFAULT_SETTINGS` 默认值）；
+  无本机路径、用户名、密钥、真实账本数据
+- **影响**：克隆仓库后 `npm test` 即可运行，当前 88/88 通过
+
 ## [2026-11-23] 多语言端口化：LocaleProfile 与货币符号覆盖
 
 - **类型**：重构（行为不变）+ 特性（货币符号可覆盖）
