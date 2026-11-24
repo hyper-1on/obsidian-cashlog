@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting } from "obsidian";
+import { App, Modal, Notice, Setting, TextComponent } from "obsidian";
 import { t, tp } from "./i18n";
 import { createSection } from "./ui/Section";
 import { addChild, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
@@ -173,32 +173,30 @@ export class TagTreeModal extends Modal {
     }
   }
 
-  // 行内输入：把整行替换成输入框，回车提交、Esc 取消
+  // 行内输入：用 Obsidian 的 TextComponent，外观与设置页输入框一致
   private inlineInput(row: HTMLElement, initial: string, onDone: (value: string) => void): void {
     row.empty();
     row.addClass("cashlog-tag-tree-row-editing");
 
-    const input = activeDocument.createElement("input");
-    input.type = "text";
-    input.value = initial;
-    input.className = "cashlog-tag-tree-input";
-    row.appendChild(input);
-    input.focus();
-    input.select();
+    const text = new TextComponent(row);
+    text.setValue(initial);
+    text.inputEl.addClass("cashlog-tag-tree-input");
+    text.inputEl.focus();
+    text.inputEl.select();
 
     let done = false;
     const finish = (commit: boolean): void => {
       if (done) return;
       done = true;
-      if (commit) onDone(input.value);
+      if (commit) onDone(text.getValue());
       void this.render();
     };
 
-    input.addEventListener("keydown", (e) => {
+    text.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") finish(true);
       else if (e.key === "Escape") finish(false);
     });
-    input.addEventListener("blur", () => finish(false));
+    text.inputEl.addEventListener("blur", () => finish(false));
   }
 
   private countNodes(nodes: TagNode[]): number {

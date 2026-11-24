@@ -2207,3 +2207,14 @@ body.theme-dark .cashlog-settings-content {
   font-size: 0.85em;
   color: var(--text-faint);
 }
+
+/* 「管理所有标签」按钮：与上方 chips 拉开间距，不抢视觉 */
+.cashlog-manage-tags-btn {
+  margin-top: 10px;
+}
+
+/* 内联改名输入框：TextComponent 自带边框，这里只调宽度 */
+.cashlog-tag-tree-input {
+  flex: 1;
+  min-width: 0;
+}

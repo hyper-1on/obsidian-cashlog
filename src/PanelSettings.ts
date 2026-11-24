@@ -109,29 +109,31 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       });
     }
 
-    // 统一的树形管理入口：一次看到支出/收入/附加维度下的全部标签
-  new Setting(content).addButton((btn) => {
-    btn.setButtonText(t("panelSettings.manageAllTags")).onClick(() => {
-      new TagTreeModal(
-        plugin.app,
-        [
-          { key: "expense", title: s.expenseTag, nodes: s.expenseTagTree ?? [] },
-          { key: "income", title: s.incomeTag, nodes: s.incomeTagTree ?? [] },
-          { key: "extra", title: t("panelSettings.extraTagDimensions"), nodes: s.extraTagTrees ?? [] },
-        ],
-        async () => {
-          await plugin.saveSettings();
-        },
-      ).open();
-    });
-  });
-
-  renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
+    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
 
     renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseTagTree ?? [], plugin);
 
   // 附加标签维度：可自由命名（地点、必要性……），每个维度下可再挂值
   renderSubTagList(content, t("panelSettings.extraTagDimensions"), s.extraTagTrees ?? [], plugin);
+
+  // 树形总览入口：普通按钮，不用 Setting 行（那会带分割线和整行 hover，和上面的 chips 不搭）
+  const manageBtn = activeDocument.createElement("button");
+  manageBtn.className = "cashlog-settings-btn cashlog-manage-tags-btn";
+  manageBtn.textContent = t("panelSettings.manageAllTags");
+  manageBtn.addEventListener("click", () => {
+    new TagTreeModal(
+      plugin.app,
+      [
+        { key: "expense", title: s.expenseTag, nodes: s.expenseTagTree ?? [] },
+        { key: "income", title: s.incomeTag, nodes: s.incomeTagTree ?? [] },
+        { key: "extra", title: t("panelSettings.extraTagDimensions"), nodes: s.extraTagTrees ?? [] },
+      ],
+      async () => {
+        await plugin.saveSettings();
+      },
+    ).open();
+  });
+  content.appendChild(manageBtn);
   });
 
   // ========== 账户设置 ==========

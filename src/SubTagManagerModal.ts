@@ -59,7 +59,8 @@ export class SubTagManagerModal extends Modal {
       contentEl.createDiv({ cls: "cashlog-subtag-manager-empty", text: t("subTagManager.empty") });
     }
 
-    const body = createSection(contentEl, { title: this.title(), cls: "cashlog-subtag-manager-section" });
+    // 不再给卡片加标题：弹窗标题已经是「X 的子标签」，两层标题会互相打架
+    const body = createSection(contentEl, { cls: "cashlog-subtag-manager-section" });
     const list = body.createDiv({ cls: "cashlog-subtag-manager-list" });
 
     for (const child of [...children]) {
