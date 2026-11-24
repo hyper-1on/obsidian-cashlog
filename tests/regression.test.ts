@@ -2479,3 +2479,40 @@ test("[标签] 预算的标签筛选按 / 边界匹配，不应命中前缀相�
     `只应统计餐饮这一支（30），实际 ${progress[0].spent}——startsWith 会把餐饮娱乐也算进来`,
   );
 });
+test("[标签] hide tag 应移除独立的标签列", () => {
+  const withTag = renderTable("column tag");
+  assert.ok(withTag.includes("购物"), `对照：不写 hide 时应显示标签，实际: ${withTag}`);
+
+  const hidden = renderTable("column tag\nhide tag");
+  assert.ok(
+    !hidden.includes("购物"),
+    `hide tag 后独立标签列应消失，实际: ${hidden}`,
+  );
+});
+
+test("[标签] hide time 应移除独立的时间列", () => {
+  const settings = makeSettings({ showEditButton: false, showNoteLink: false });
+  const entries = [parse("- #支出/购物 买衣服 💳微信💴-200 ➕2026-04-25 ⏰12:30", settings)]
+    .filter((e): e is CashlogEntry => e !== null);
+  assert.equal(entries.length, 1, "测试条目应能解析（含时间）");
+
+  const render = (source: string): string => {
+    const query = new Query(source, settings);
+    assert.equal(query.getError(), null, `查询不应报错: ${query.getError()}`);
+    const container = new FakeElement("div");
+    renderChartTable(
+      container as unknown as HTMLElement,
+      query.apply(entries),
+      query,
+      parseTableConfig(source),
+      fakePlugin(settings, entries),
+    );
+    return collectText(container);
+  };
+
+  assert.ok(render("column time").includes("12:30"), "对照：不写 hide 时应显示时间");
+  assert.ok(
+    !render("column time\nhide time").includes("12:30"),
+    "hide time 后独立时间列应消失",
+  );
+});

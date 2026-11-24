@@ -47,6 +47,12 @@ function resolveVisibleColumns(
         return !query.shouldHideAmount;
       case "account":
         return !(query.shouldHideAccount && !query.shouldShowAccount);
+      // tag / time 是后加的独立列，之前落到 default 分支，
+      // 于是 hide tag / hide time 对这两列完全无效（静默失效）。
+      case "tag":
+        return !query.shouldHideTag;
+      case "time":
+        return !query.shouldHideTime;
       default:
         return true;
     }
