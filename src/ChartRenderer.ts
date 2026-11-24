@@ -700,9 +700,19 @@ function computeBarValue(entries: CashlogEntry[], splitBy: SplitBy, item: string
         default: return 0;
       }
     }
-    case "tag":
-      return entries.filter((e) => e.tags.some((t) => t === item || t.startsWith(item + "/")))
+    case "tag": {
+      // 拆分项可能来自图表弹窗（带 #）或手写查询（通常不带），
+      // 两边归一化后再比，否则手写的 "chart bar items 支出/餐饮" 会聚合为 0。
+      const want = parseTagText(item);
+      return entries
+        .filter((e) =>
+          e.tags.some((t) => {
+            const tag = parseTagText(t);
+            return tag === want || tag.startsWith(want + "/");
+          }),
+        )
         .reduce((s, e) => s + pickEntryAmount(e, splitBy, xGroupBy, item, groupKey), 0);
+    }
     case "account":
       return entries.filter((e) => e.accountAmounts.some((aa) => aa.account === item))
         .reduce((s, e) => s + pickEntryAmount(e, splitBy, xGroupBy, item, groupKey), 0);
