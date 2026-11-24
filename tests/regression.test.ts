@@ -2454,3 +2454,28 @@ test("[静态] 附加标签选择器：用 / 表示维度本身，无子标签�
     "维度没有子标签时应直接选中它本身，不再套一层只有一项的子菜单",
   );
 });
+test("[标签] 预算的标签筛选按 / 边界匹配，不应命中前缀相同的兄弟标签", () => {
+  const settings = makeSettings();
+  const manager = new BudgetManager();
+  const day = moment().date(10).format("YYYY-MM-DD");
+
+  const inside = parse(`- #支出/餐饮/午餐 午饭 💴-30 ➕${day}`, settings);
+  const sibling = parse(`- #支出/餐饮娱乐 网吧 💴-50 ➕${day}`, settings);
+  assert.ok(inside && sibling, "两条测试条目都应能解析");
+
+  const budget = {
+    id: "b1",
+    name: "餐饮预算",
+    amount: 100,
+    period: "monthly" as const,
+    tag: "#支出/餐饮",
+    rollover: false,
+  };
+
+  const progress = manager.getBudgetProgress([inside!, sibling!], [budget], 1, 1);
+  assert.equal(
+    progress[0].spent,
+    30,
+    `只应统计餐饮这一支（30），实际 ${progress[0].spent}——startsWith 会把餐饮娱乐也算进来`,
+  );
+});

@@ -5,6 +5,7 @@ import { DateRange } from "./Query/DateRange";
 import { moment } from "./types";
 import type { Moment } from "./types";
 import { round2 } from "./MoneyUtils";
+import { tagPathMatches } from "./TagTree";
 
 export interface BudgetProgress {
   config: BudgetConfig;
@@ -213,9 +214,9 @@ export class BudgetManager {
       if (!checkType(entry)) return false;
 
       if (tag) {
-        const matchesTag = entry.tags.some((t) =>
-          t.toLowerCase().startsWith(tag.toLowerCase()),
-        );
+        // 与查询过滤器同一套 "/" 边界规则：
+        // startsWith 会把 "支出/餐饮" 也算进 "支出/餐饮娱乐"
+        const matchesTag = entry.tags.some((t) => tagPathMatches(t, tag));
         if (!matchesTag) return false;
       }
 

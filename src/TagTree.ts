@@ -21,6 +21,17 @@ export function parseTagText(tag: string): string {
   return tag.replace(/^#/, "");
 }
 
+// 标签路径匹配：target 是否命中 entryTag 所在的这一支。
+// 按 "/" 边界判断，命中三种位置：等于自身、开头（下级）、中间层级、结尾。
+// 查询过滤器与预算/目标的标签筛选共用这一套规则，
+// 否则 "支出/餐饮" 会把 "支出/餐饮娱乐" 也算进来。
+export function tagPathMatches(entryTag: string, target: string): boolean {
+  const t = parseTagText(entryTag).toLowerCase();
+  const g = parseTagText(target).toLowerCase();
+  if (t === g || t.startsWith(g + "/")) return true;
+  return t.includes("/" + g + "/") || t.endsWith("/" + g);
+}
+
 // 单段名称校验（不含 "/"：层级由树表达）
 export function validateTagSegment(name: string): { valid: boolean; message?: string } {
   if (!name || !name.trim()) return { valid: false, message: "tag.segment.empty" };
