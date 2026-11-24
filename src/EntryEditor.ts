@@ -69,7 +69,9 @@ export function buildEntryFromModalData(
       0,
       validDate,
       data.time || null,
-      [settings.transferTag],
+      // 附加标签必须一起写回：编辑旧记录时它们已经由 createDefaultData 提取出来，
+      // 只写 transferTag 会让这些标签在保存后静默消失。
+      [settings.transferTag, ...(data.extraTags ?? [])],
       context.indentation,
       context.listMarker,
       context.location,
@@ -105,7 +107,8 @@ export function buildEntryFromModalData(
       0,
       validDate,
       data.time || null,
-      [settings.balanceChangeTag],
+      // 同转账：附加标签不能在保存时丢掉
+      [settings.balanceChangeTag, ...(data.extraTags ?? [])],
       context.indentation,
       context.listMarker,
       context.location,

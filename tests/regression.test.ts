@@ -15,7 +15,7 @@ import {
 } from "../src/CashlogSerializer";
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
 import { validateSubTagName } from "../src/TagValidation";
-import { createDefaultData } from "../src/CashlogModal";
+import { CashlogModal, createDefaultData } from "../src/CashlogModal";
 import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode, parseTagText } from "../src/TagTree";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
@@ -2346,4 +2346,98 @@ test("[标签树] 真实时序：推迟的失焦清理不应误关刚打开的�
   } finally {
     g.window.setTimeout = realSetTimeout;
   }
+});
+// ===== P1：转账 / 余额变更编辑保存时附加标签必须写回 =====
+// 这两条只验证「提取」是不够的：真正丢失发生在 buildEntryFromModalData。
+test("[标签] 编辑转账条目后，附加标签必须写回新条目", () => {
+  const settings = makeSettings({ enableAccounts: true });
+  const entry = parse("- #转账 还钱 #地点/银行 💳微信💴-100 💳支付宝💴100 ➕2026-04-25", settings)!;
+
+  const data = createDefaultData(settings, entry);
+  assert.deepEqual(data.extraTags, ["#地点/银行"], "前提：提取阶段应保留");
+
+  const built = buildEntryFromModalData(data, fakePlugin(settings, [entry]), {
+    indentation: "",
+    listMarker: "-",
+    location: entry.location,
+  });
+
+  assert.deepEqual(
+    built.tags,
+    ["#转账", "#地点/银行"],
+    `转账编辑后应保留附加标签，实际: ${built.tags.join(", ")}`,
+  );
+});
+
+test("[标签] 编辑余额变更条目后，附加标签必须写回新条目", () => {
+  const settings = makeSettings({
+    enableAccounts: true,
+    accounts: ["测试A"],
+    accountBalances: { 测试A: 100 },
+  });
+  const entry = parse("- #余额变更 对账 #地点/银行 💳测试A💴200 ➕2026-04-25", settings)!;
+
+  const data = createDefaultData(settings, entry);
+  assert.deepEqual(data.extraTags, ["#地点/银行"], "前提：提取阶段应保留");
+
+  const built = buildEntryFromModalData(data, fakePlugin(settings, [entry]), {
+    indentation: "",
+    listMarker: "-",
+    location: entry.location,
+  });
+
+  assert.deepEqual(
+    built.tags,
+    ["#余额变更", "#地点/银行"],
+    `余额变更编辑后应保留附加标签，实际: ${built.tags.join(", ")}`,
+  );
+});
+test("[标签] 编辑转账条目时，附加标签编辑区必须出现", () => {
+  const settings = makeSettings({
+    enableAccounts: true,
+    extraTagTrees: [{ name: "地点", children: [{ name: "银行" }] }],
+  });
+  const entry = parse("- #转账 还钱 #地点/银行 💳微信💴-100 💳支付宝💴100 ➕2026-04-25", settings)!;
+
+  const modal = new CashlogModal(
+    {} as never,
+    settings,
+    entry,
+    () => {},
+    undefined,
+    fakePlugin(settings, [entry]),
+  );
+  modal.open();
+
+  const content = (modal as unknown as { contentEl: FakeElement }).contentEl;
+  const chips = content.querySelectorAll(".cashlog-extra-tag-chips");
+  assert.equal(chips.length, 1, "转账条目也应有附加标签编辑区（此前只在收入/支出分支渲染）");
+  assert.ok(collectText(content).includes("地点/银行"), "应显示已有附加标签");
+});
+
+test("[标签] 编辑余额变更条目时，附加标签编辑区必须出现", () => {
+  const settings = makeSettings({
+    enableAccounts: true,
+    accounts: ["测试A"],
+    accountBalances: { 测试A: 100 },
+    extraTagTrees: [{ name: "地点", children: [{ name: "银行" }] }],
+  });
+  const entry = parse("- #余额变更 对账 #地点/银行 💳测试A💴200 ➕2026-04-25", settings)!;
+
+  const modal = new CashlogModal(
+    {} as never,
+    settings,
+    entry,
+    () => {},
+    undefined,
+    fakePlugin(settings, [entry]),
+  );
+  modal.open();
+
+  const content = (modal as unknown as { contentEl: FakeElement }).contentEl;
+  assert.equal(
+    content.querySelectorAll(".cashlog-extra-tag-chips").length,
+    1,
+    "余额变更条目也应有附加标签编辑区",
+  );
 });

@@ -227,7 +227,6 @@ export class CashlogModal extends Modal {
       }
     } else {
       this.renderSubTagField(conditionalArea);
-      this.renderExtraTagsField(conditionalArea);
       this.renderConditionalDescription(conditionalArea);
       if (this.settings.enableAccounts) {
         this.renderAccountRows(conditionalArea);
@@ -235,6 +234,10 @@ export class CashlogModal extends Modal {
         this.renderAmountField(conditionalArea);
       }
     }
+
+    // 附加标签（地点、必要性这类独立维度）与记账类型无关：
+    // 转账和余额变更同样可能带附加标签，编辑时必须看得见，否则保存就会丢。
+    this.renderExtraTagsField(conditionalArea);
 
     // 组 3、4：附件与时间；按钮不进组，贴在最后
     if (needsFullRebuild) {
