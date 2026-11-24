@@ -37,6 +37,11 @@ import { FakeElement, collectText } from "./stubs/dom";
 import { CashlogSettingsTab } from "../src/SettingsTab";
 import { CashlogView } from "../src/CashlogView";
 import { renderPanelSettings, openSubTagRenameModal, openSubTagDeleteModal, formatMigrationSkips } from "../src/PanelSettings";
+import { parseImportRows } from "../src/Import/index";
+import { decodeImportText } from "../src/Import/encoding";
+import { parseCsv } from "../src/Import/csv";
+import { reconcile, summarize } from "../src/Import/reconcile";
+import { parseMoney, normalizeTradeTime } from "../src/Import/values";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2698,4 +2703,105 @@ test("[静态] 面板右键删除应走确认弹窗，而不是直接 splice", (
     src.includes("openSubTagDeleteModal(row, plugin, node, mainTag, async () =>"),
     "删除项应调用 openSubTagDeleteModal 做确认",
   );
+});
+// ===== 导入：解析核心 =====
+// fixture 来自真实导出，已脱敏（姓名/账号/商户/单号/时间全部替换，金额保留），
+// 保留金额是为了让文件头的汇总行仍能与明细对账。
+
+function loadImportFixture(name: string) {
+  const p = join(process.cwd(), "tests", "fixtures", "import", name);
+  const bytes = readFileSync(p);
+  const { text, encoding } = decodeImportText(bytes as unknown as Uint8Array);
+  return { result: parseImportRows(parseCsv(text)), encoding };
+}
+
+test("[导入] 支付宝分列式：识别来源、定位表头、与文件头对账通过", () => {
+  const { result, encoding } = loadImportFixture("alipay-ledger.csv");
+
+  assert.equal(encoding, "UTF-8", "脱敏后的 fixture 是 UTF-8");
+  assert.equal(result.source, "alipay_ledger");
+  assert.equal(result.headerRow, 13, "表头在第 13 行");
+  assert.equal(result.header.length, 8);
+  assert.equal(result.records.length, 36, "应解析出 36 条");
+  assert.equal(result.skipped.length, 0, `不应有跳过：${JSON.stringify(result.skipped.slice(0, 2))}`);
+
+  const rec = reconcile(result.records, result.declared);
+  assert.equal(
+    rec.failed,
+    false,
+    `对账应通过，实际：${rec.items.filter((i) => i.ok === false).map((i) => `${i.label} ${i.actual}/${i.declared}`).join("; ")}`,
+  );
+
+  const s = summarize(result.records);
+  assert.equal(s.income.count, 10);
+  assert.equal(s.expense.count, 26);
+  assert.equal(s.income.sum, 1506.01);
+  assert.equal(s.expense.sum, 1504.6);
+});
+
+test("[导入] 微信个人账单：识别来源、定位表头、与文件头对账通过", () => {
+  const { result } = loadImportFixture("wechat-personal.csv");
+
+  assert.equal(result.source, "wechat_personal");
+  assert.equal(result.headerRow, 18, "表头在第 18 行");
+  assert.equal(result.header.length, 11);
+  assert.equal(result.records.length, 150);
+  assert.equal(result.skipped.length, 0);
+
+  const rec = reconcile(result.records, result.declared);
+  assert.equal(
+    rec.failed,
+    false,
+    `对账应通过，实际：${rec.items.filter((i) => i.ok === false).map((i) => `${i.label} ${i.actual}/${i.declared}`).join("; ")}`,
+  );
+
+  const s = summarize(result.records);
+  assert.equal(s.income.count, 46);
+  assert.equal(s.expense.count, 103);
+  assert.equal(s.income.sum, 3362.2);
+  assert.equal(s.expense.sum, 3192.52);
+});
+
+test("[导入] 微信的中性交易必须记为 undetermined，不能猜成转账", () => {
+  const { result } = loadImportFixture("wechat-personal.csv");
+
+  const undetermined = result.records.filter((r) => r.direction === "undetermined");
+  assert.equal(undetermined.length, 1, "中性交易应恰好 1 条");
+  assert.equal(undetermined[0].amount, 1000, "金额应为 1000");
+  assert.equal(
+    result.records.filter((r) => r.direction === "transfer").length,
+    0,
+    "平台没有给出确定语义，不应自行归为 transfer",
+  );
+
+  // 文件头声明的「中性交易：1笔 1000.00元」也要对上
+  assert.equal(result.declared?.transfer?.count, 1);
+  assert.equal(result.declared?.transfer?.sum, 1000);
+});
+
+test("[导入] 金额清洗：货币符号、千分位、0.00 与非数字", () => {
+  assert.equal(parseMoney("￥-1,234.56"), -1234.56, "应剥离 ￥ 与千分位");
+  assert.equal(parseMoney("0.00"), 0, "0.00 是有效值（账户开户这类记录），不能当空");
+  assert.equal(parseMoney(""), null);
+  assert.equal(parseMoney("/"), null);
+  assert.equal(parseMoney(null), null);
+  assert.equal(parseMoney("abc"), null);
+});
+
+test("[导入] 时间归一化：多种写法统一成 ISO 本地时间", () => {
+  assert.equal(normalizeTradeTime("2026-10-16 07:44:25"), "2026-10-16T07:44:25");
+  assert.equal(normalizeTradeTime("2026/10/16 07:44"), "2026-10-16T07:44:00");
+  assert.equal(normalizeTradeTime("2026-10-16"), "2026-10-16T00:00:00");
+  assert.equal(normalizeTradeTime("20261016"), "2026-10-16T00:00:00");
+  assert.equal(normalizeTradeTime("不是时间"), null);
+});
+
+test("[导入] 无法识别表头时返回空结果而不是抛错", () => {
+  const result = parseImportRows([
+    ["随便", "几", "行"],
+    ["没有任何", "已知列名", "的表格"],
+  ]);
+  assert.equal(result.source, null);
+  assert.equal(result.headerRow, null);
+  assert.equal(result.records.length, 0);
 });
