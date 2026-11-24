@@ -64,11 +64,30 @@ function scrubText(text: string): string {
 }
 
 /** 生成递增的假时间，保留「绝大多数格式」但去掉真实时间信息。 */
-function fakeTime(index: number): string {
-  const day = String((index % 28) + 1).padStart(2, "0");
-  const hour = String(index % 24).padStart(2, "0");
-  const minute = String((index * 7) % 60).padStart(2, "0");
-  return `2026-01-${day} ${hour}:${minute}:00`;
+/**
+ * 把原始时间映射成假时间，同一个原始时间必须映射到同一个假时间。
+ *
+ * 这一点很关键：支付宝的内部划转是「同一秒、等额、方向相反」的成对记录，
+ * 如果每行都换一个不同的假时间，转账配对就永远识别不出来了 ——
+ * fixture 必须保住原始数据里「哪些行同秒」这个关系。
+ */
+function createTimeMapper(): (original: string) => string {
+  const cache = new Map<string, string>();
+  let seq = 0;
+
+  return (original: string): string => {
+    const key = original.trim();
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+
+    seq++;
+    const day = String((seq % 28) + 1).padStart(2, "0");
+    const hour = String(seq % 24).padStart(2, "0");
+    const minute = String((seq * 7) % 60).padStart(2, "0");
+    const fake = `2026-01-${day} ${hour}:${minute}:00`;
+    cache.set(key, fake);
+    return fake;
+  };
 }
 
 function serializeCsv(rows: string[][]): string {
@@ -102,6 +121,7 @@ function makeAlipayFixture(): void {
   const iNote = header.indexOf("备注");
 
   let recordNo = 0;
+  const mapTime = createTimeMapper();
   const out: string[][] = [];
 
   // 表头之前的说明行：保留结构，抹掉账号
@@ -123,7 +143,7 @@ function makeAlipayFixture(): void {
 
     recordNo++;
     if (iSerial >= 0) row[iSerial] = `SAMPLE${String(recordNo).padStart(6, "0")}`;
-    if (iTime >= 0) row[iTime] = fakeTime(recordNo);
+    if (iTime >= 0) row[iTime] = mapTime(String(row[iTime] ?? ""));
     if (iName >= 0) row[iName] = `示例对方${((recordNo - 1) % 5) + 1}`;
     if (iNote >= 0) row[iNote] = "";
     out.push(row.map((c) => scrubText(String(c ?? ""))));
@@ -168,6 +188,7 @@ function makeWechatFixture(): void {
   const iMerchantOrder = header.indexOf("商户单号");
 
   let recordNo = 0;
+  const mapTime = createTimeMapper();
   const out: string[][] = [];
 
   for (let r = 0; r < headerRow; r++) {
@@ -183,7 +204,7 @@ function makeWechatFixture(): void {
     }
 
     recordNo++;
-    if (iTime >= 0) row[iTime] = fakeTime(recordNo);
+    if (iTime >= 0) row[iTime] = mapTime(String(row[iTime] ?? ""));
     // 交易类型里可能带商户名（如「肯德基-退款」），一并脱敏
     if (iType >= 0) row[iType] = `示例类型${((recordNo - 1) % 4) + 1}`;
     if (iParty >= 0) row[iParty] = `示例对方${((recordNo - 1) % 5) + 1}`;

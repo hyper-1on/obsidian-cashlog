@@ -42,6 +42,9 @@ import { decodeImportText } from "../src/Import/encoding";
 import { parseCsv } from "../src/Import/csv";
 import { reconcile, summarize } from "../src/Import/reconcile";
 import { parseMoney, normalizeTradeTime } from "../src/Import/values";
+import { toDrafts } from "../src/Import/draft";
+import { markDuplicates } from "../src/Import/dedupe";
+import { findTransferPairs, pairIndex } from "../src/Import/pairing";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2804,4 +2807,104 @@ test("[导入] 无法识别表头时返回空结果而不是抛错", () => {
   assert.equal(result.source, null);
   assert.equal(result.headerRow, null);
   assert.equal(result.records.length, 0);
+});
+test("[导入] 草稿：描述可读、中性交易进入待定状态", () => {
+  const { result } = loadImportFixture("wechat-personal.csv");
+  const drafts = toDrafts(result.records);
+
+  assert.equal(drafts.length, 150);
+  assert.ok(
+    drafts.every((d) => d.entryType !== undefined),
+    "每条都应有 entryType 字段",
+  );
+  assert.ok(
+    drafts.every((d) => d.description.trim().length > 0),
+    "描述不应为空，否则清单里没法认",
+  );
+
+  const pending = drafts.filter((d) => d.status === "needs-direction");
+  assert.equal(pending.length, 1, "中性交易应进入待定");
+  assert.equal(pending[0].entryType, null, "待定时不能预设条目类型");
+  assert.equal(pending[0].selected, false, "待定的默认不勾选");
+});
+
+test("[导入] 去重：同一订单号在本次文件里只保留第一条", () => {
+  const record = {
+    source: "wechat_personal" as const,
+    rowIndex: 1,
+    tradeTime: "2026-01-05T10:00:00",
+    direction: "expense" as const,
+    amount: 20,
+    currency: "CNY",
+    balance: null,
+    counterparty: "示例对方",
+    category: null,
+    payMethod: "零钱",
+    status: "支付成功",
+    orderNo: "SAMEORDER0001",
+    merchantOrderNo: null,
+    product: null,
+    note: null,
+    raw: {},
+  };
+
+  const drafts = toDrafts([record, { ...record, rowIndex: 2 }]);
+  markDuplicates(drafts, []);
+
+  assert.equal(drafts[0].status, "new");
+  assert.equal(drafts[1].status, "batch-duplicate", "第二条应被认作批次内重复");
+  assert.equal(drafts[1].selected, false);
+});
+
+test("[导入] 去重：笔记里已有同日同额同方向的记录时标疑似并默认不勾", () => {
+  const record = {
+    source: "alipay_ledger" as const,
+    rowIndex: 1,
+    tradeTime: "2026-01-05T10:00:00",
+    direction: "expense" as const,
+    amount: 35.5,
+    currency: "CNY",
+    balance: null,
+    counterparty: "示例商户",
+    category: null,
+    payMethod: "余额",
+    status: null,
+    orderNo: "ORDER0001",
+    merchantOrderNo: null,
+    product: null,
+    note: null,
+    raw: {},
+  };
+
+  const drafts = toDrafts([record]);
+  markDuplicates(drafts, [{ date: "2026-01-05", amount: 35.5, direction: "expense" }]);
+
+  assert.equal(drafts[0].status, "suspect-duplicate");
+  assert.equal(drafts[0].duplicateCount, 1);
+  assert.equal(drafts[0].selected, false, "疑似重复默认不勾，避免重复入账");
+
+  // 对照组：金额不同就不应命中
+  const other = toDrafts([{ ...record, amount: 35.51 }]);
+  markDuplicates(other, [{ date: "2026-01-05", amount: 35.5, direction: "expense" }]);
+  assert.equal(other[0].status, "new");
+});
+
+test("[导入] 转账配对：支付宝样本里的成对划转能被识别", () => {
+  const { result } = loadImportFixture("alipay-ledger.csv");
+  const drafts = toDrafts(result.records);
+  const pairs = findTransferPairs(drafts);
+
+  assert.ok(pairs.length > 0, "样本里有同一秒、等额、方向相反的成对记录");
+
+  for (const pair of pairs) {
+    assert.equal(pair.out.entryType, "expense");
+    assert.equal(pair.in.entryType, "income");
+    assert.equal(pair.out.record.amount, pair.in.record.amount);
+    assert.equal(pair.out.record.tradeTime, pair.in.record.tradeTime);
+  }
+
+  // 配对的另一半要能反查
+  const index = pairIndex(pairs);
+  assert.equal(index.get(pairs[0].out), pairs[0].in);
+  assert.equal(index.get(pairs[0].in), pairs[0].out);
 });
