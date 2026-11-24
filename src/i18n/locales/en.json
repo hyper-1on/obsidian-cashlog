@@ -473,5 +473,21 @@
   "subTagManager.exists": "{name} already exists",
   "subTagManager.removed": "Deleted {name}"
 ,
-  "panelSettings.extraTagDimensions": "Extra tag dimensions"
+  "panelSettings.extraTagDimensions": "Extra tag dimensions",
+  "tagTree.title": "Manage tags",
+  "tagTree.hint": "✏ rename　+ add child　✕ delete (click twice)",
+  "tagTree.empty": "No tags yet",
+  "tagTree.addPlaceholder": "New root tag",
+  "tagTree.addButton": "Add",
+  "tagTree.rename": "Rename",
+  "tagTree.addChild": "Add child tag",
+  "tagTree.remove": "Delete",
+  "tagTree.invalid": "Invalid name: {reason}",
+  "tagTree.exists": "{name} already exists",
+  "tagTree.removed": "Deleted {name}",
+  "tagTree.removeConfirm": "Delete {name}?",
+  "tagTree.renameHint": "Type the new name inline",
+  "tagTree.renamePrompt": "New name",
+  "tagTree.addChildPrompt": "Add a child tag to {name}",
+  "panelSettings.manageAllTags": "Manage all tags"
 }

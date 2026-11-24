@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { Menu, Notice, normalizePath, setIcon } from "obsidian";
+import { Menu, Notice, Setting, normalizePath, setIcon } from "obsidian";
 import { FolderSuggest } from "./FolderSuggest";
 import type CashlogPlugin from "./main";
 import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { validateSubTagName, validateAccountName } from "./TagValidation";
 import { SubTagManagerModal } from "./SubTagManagerModal";
+import { TagTreeModal } from "./TagTreeModal";
 import { pruneEmptyNodes } from "./TagTree";
 import type { TagNode } from "./TagTree";
 import { t, tp, formatMoney } from "./i18n";
@@ -108,7 +109,24 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       });
     }
 
-    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
+    // 统一的树形管理入口：一次看到支出/收入/附加维度下的全部标签
+  new Setting(content).addButton((btn) => {
+    btn.setButtonText(t("panelSettings.manageAllTags")).onClick(() => {
+      new TagTreeModal(
+        plugin.app,
+        [
+          { key: "expense", title: s.expenseTag, nodes: s.expenseTagTree ?? [] },
+          { key: "income", title: s.incomeTag, nodes: s.incomeTagTree ?? [] },
+          { key: "extra", title: t("panelSettings.extraTagDimensions"), nodes: s.extraTagTrees ?? [] },
+        ],
+        async () => {
+          await plugin.saveSettings();
+        },
+      ).open();
+    });
+  });
+
+  renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
 
     renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseTagTree ?? [], plugin);
 
@@ -643,9 +661,16 @@ function renderSubTagList(
     const childCount = node.children?.length ?? 0;
     chip.textContent = childCount > 0 ? `${node.name} (${childCount})` : node.name;
 
-    // 左键：进入管理弹窗（此前只有右键菜单，左键点了没反应）
+    // 左键：进入该节点的子树管理
     chip.addEventListener("click", () => {
       new SubTagManagerModal(plugin.app, tree, [node.name], save).open();
+    });
+
+    // 右键：打开树形总览（改名 / 加子节点 / 删除都在那里）
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save).open();
     });
 
     chipContainer.appendChild(chip);

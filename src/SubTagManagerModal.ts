@@ -1,5 +1,6 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import { t, tp } from "./i18n";
+import { createSection } from "./ui/Section";
 import { addChild, findNode, removeNode, validateTagSegment, pruneEmptyNodes } from "./TagTree";
 import type { TagNode } from "./TagTree";
 
@@ -58,7 +59,8 @@ export class SubTagManagerModal extends Modal {
       contentEl.createDiv({ cls: "cashlog-subtag-manager-empty", text: t("subTagManager.empty") });
     }
 
-    const list = contentEl.createDiv({ cls: "cashlog-subtag-manager-list" });
+    const body = createSection(contentEl, { title: this.title(), cls: "cashlog-subtag-manager-section" });
+    const list = body.createDiv({ cls: "cashlog-subtag-manager-list" });
 
     for (const child of [...children]) {
       const row = list.createDiv({ cls: "cashlog-subtag-manager-row" });
@@ -99,7 +101,7 @@ export class SubTagManagerModal extends Modal {
     }
 
     // 新增子标签
-    new Setting(contentEl)
+    new Setting(body)
       .setName(t("subTagManager.addTitle"))
       .addText((text) => {
         text.setPlaceholder(t("subTagManager.addPlaceholder"));

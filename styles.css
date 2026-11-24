@@ -2071,3 +2071,139 @@ body.theme-dark .cashlog-settings-content {
   font-size: 0.85em;
   color: var(--text-faint);
 }
+
+/* ===== 标签树弹窗（TagTreeModal） ===== */
+.cashlog-tag-tree-hint {
+  margin-bottom: 12px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.cashlog-tag-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  min-height: 28px;
+}
+
+.cashlog-tag-tree-row-editing {
+  padding-left: 0;
+}
+
+.cashlog-tag-tree-name {
+  flex: 1;
+  font-size: 0.95em;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashlog-tag-tree-input {
+  flex: 1;
+  font-size: 0.95em;
+}
+
+.cashlog-tag-tree-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 操作按钮：24px 点击区，图标放大到能看清 */
+.cashlog-tag-tree-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.cashlog-tag-tree-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* 删除按钮单独放大：它最需要被看见也最需要被避开 */
+.cashlog-tag-tree-btn-danger {
+  font-size: 1.45em;
+  color: var(--text-error);
+}
+
+.cashlog-tag-tree-btn-danger:hover {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+/* 第一次点击后的待确认态 */
+.cashlog-tag-tree-btn-armed {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  font-weight: 700;
+}
+
+.cashlog-tag-tree-empty {
+  padding: 8px 0;
+  font-size: 0.85em;
+  color: var(--text-faint);
+}
+
+/* ===== 子标签管理弹窗（SubTagManagerModal） ===== */
+.cashlog-subtag-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.cashlog-subtag-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-height: 28px;
+}
+
+.cashlog-subtag-manager-name {
+  flex: 1;
+  font-size: 0.95em;
+}
+
+.cashlog-subtag-manager-name-link {
+  cursor: pointer;
+  color: var(--text-accent);
+}
+
+.cashlog-subtag-manager-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cashlog-subtag-manager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1.15em;
+}
+
+.cashlog-subtag-manager-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.cashlog-subtag-manager-empty {
+  padding: 8px 0;
+  font-size: 0.85em;
+  color: var(--text-faint);
+}

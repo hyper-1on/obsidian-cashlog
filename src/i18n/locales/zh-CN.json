@@ -473,5 +473,21 @@
   "subTagManager.exists": "{name} 已存在",
   "subTagManager.removed": "已删除 {name}"
 ,
-  "panelSettings.extraTagDimensions": "附加标签维度"
+  "panelSettings.extraTagDimensions": "附加标签维度",
+  "tagTree.title": "标签管理",
+  "tagTree.hint": "✏ 改名　+ 加子标签　✕ 删除（点两次确认）",
+  "tagTree.empty": "还没有标签",
+  "tagTree.addPlaceholder": "新增根标签",
+  "tagTree.addButton": "添加",
+  "tagTree.rename": "改名",
+  "tagTree.addChild": "添加子标签",
+  "tagTree.remove": "删除",
+  "tagTree.invalid": "名称不合法：{reason}",
+  "tagTree.exists": "{name} 已存在",
+  "tagTree.removed": "已删除 {name}",
+  "tagTree.removeConfirm": "确认删除 {name}？",
+  "tagTree.renameHint": "直接在行内输入新名称",
+  "tagTree.renamePrompt": "新名称",
+  "tagTree.addChildPrompt": "为「{name}」添加子标签",
+  "panelSettings.manageAllTags": "管理所有标签"
 }
