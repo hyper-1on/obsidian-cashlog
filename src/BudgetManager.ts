@@ -128,6 +128,12 @@ export class BudgetManager {
   // 计算上一周期未用完的额度（预算滚存）。
   // 只有 weekly/monthly/yearly 有固定周期；day/custom/all 无法定义「上一周期」，返回 0。
   // 上期超支时不下滚（按 0 处理），避免负额度继续拉低本期额度。
+  //
+  // monthly 分支的 subtract(1, "month") 为什么不会月末回绕（不属缺陷，已复核）：
+  // statsMonthStartDay 在两处设置界面都被钳制到 1–28
+  // （SettingsTab / PanelSettings 都是 Math.max(1, Math.min(28, day))），
+  // 而 computePeriodRange 里另有一层 clampDay 兜底（min(设置值, 当月天数)）。
+  // 因此 thisStart 的「日」最多是 28，不存在「3 月 31 日减一个月变成 3 月 3 日」。
   private computeRollover(
     entries: CashlogEntry[],
     budget: BudgetConfig,
