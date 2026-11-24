@@ -108,12 +108,12 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       });
     }
 
-    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
+    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin, s.incomeTag);
 
-    renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseTagTree ?? [], plugin);
+    renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseTagTree ?? [], plugin, s.expenseTag);
 
   // 附加标签维度：可自由命名（地点、必要性……），每个维度下可再挂值
-  renderSubTagList(content, t("panelSettings.extraTagDimensions"), s.extraTagTrees ?? [], plugin);
+  renderSubTagList(content, t("panelSettings.extraTagDimensions"), s.extraTagTrees ?? [], plugin, "");
 
   // 树形总览入口：普通按钮，不用 Setting 行（那会带分割线和整行 hover，和上面的 chips 不搭）
   const manageBtn = activeDocument.createElement("button");
@@ -634,8 +634,10 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
 // 结果永远改不到它自己的名字。
 export function openSubTagRenameModal(
   container: HTMLElement,
+  plugin: CashlogPlugin,
   node: TagNode,
   siblings: TagNode[],
+  mainTag: string,
   onDone: () => Promise<void>,
 ): void {
   const overlay = createModalOverlay(container);
@@ -644,6 +646,27 @@ export function openSubTagRenameModal(
 
   const input = createModalInput(modal, t("modal.placeholder.tagName"), node.name);
   const errorEl = createModalError(modal);
+
+  // 完整标签：#主标签/节点名；附加维度没有主标签，就是 #节点名
+  const oldFull = mainTag ? `${mainTag}/${node.name}` : `#${node.name}`;
+  const usageCount = plugin.countTagUsages(oldFull);
+
+  let migrateCb: HTMLInputElement | null = null;
+  if (usageCount > 0) {
+    const hint = activeDocument.createElement("div");
+    hint.className = "cashlog-tag-modal-hint";
+    hint.textContent = tp("panelSettings.renameAffects", { count: usageCount });
+    modal.appendChild(hint);
+
+    const checkRow = activeDocument.createElement("label");
+    checkRow.className = "cashlog-tag-modal-check";
+    migrateCb = activeDocument.createElement("input");
+    migrateCb.type = "checkbox";
+    migrateCb.checked = true;
+    checkRow.appendChild(migrateCb);
+    checkRow.appendText(t("panelSettings.renameMigrateToo"));
+    modal.appendChild(checkRow);
+  }
 
   const btnRow = createModalButtonRow(modal);
   btnRow.appendChild(createModalButton(t("modal.button.cancel"), "secondary", () => overlay.remove()));
@@ -671,6 +694,29 @@ export function openSubTagRenameModal(
       try {
         node.name = newName;
         await onDone();
+
+        // 用户勾了「同时更新」才动笔记；没勾就只改预设，历史标签原样保留。
+        if (migrateCb?.checked && usageCount > 0) {
+          const newFull = mainTag ? `${mainTag}/${newName}` : `#${newName}`;
+          const result = await plugin.migrateTagDetailed(oldFull, newFull);
+          if (result.migrated > 0 || result.skipped.length > 0) {
+            new Notice(
+              tp("notice.migrationSkipped", {
+                count: result.migrated,
+                skipped: result.skipped.length,
+              }),
+            );
+          }
+          if (result.skipped.length > 0) {
+            // 明细放控制台：每条都带 文件:行号，便于逐条核对
+            // eslint-disable-next-line no-console
+            console.warn(
+              "[cashlog] 以下条目未能迁移：",
+              result.skipped.map((s) => `${s.path}:${s.line} (${s.reason})`),
+            );
+          }
+        }
+
         overlay.remove();
       } catch (e) {
         new Notice(tp("notice.tagEditFailed", { message: getErrorMessage(e) }));
@@ -691,6 +737,7 @@ function renderSubTagList(
   label: string,
   tree: TagNode[],
   plugin: CashlogPlugin,
+  mainTag: string,
 ): void {
   const row = activeDocument.createElement("div");
   row.className = "cashlog-settings-row";
@@ -736,7 +783,7 @@ function renderSubTagList(
           .setTitle(t("panelSettings.renameTag"))
           .setIcon("pencil")
           .onClick(() => {
-            openSubTagRenameModal(row, node, tree, save);
+            openSubTagRenameModal(row, plugin, node, tree, mainTag, save);
           });
       });
 

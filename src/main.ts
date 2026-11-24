@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
 import { CashlogSettings, createDefaultSettings } from "./Settings";
-import { legacyToTree } from "./TagTree";
+import { legacyToTree, parseTagText } from "./TagTree";
 import { CashlogSettingsTab } from "./SettingsTab";
 import { addCommands, createOrEdit } from "./Commands";
 import { ChartModal } from "./ChartModal";
@@ -15,6 +15,19 @@ import { AccountManager } from "./AccountManager";
 import { BudgetManager } from "./BudgetManager";
 import { CashlogView, CASHLOG_VIEW_TYPE } from "./CashlogView";
 import { initI18n, t, tp, setCurrencyOverride } from "./i18n";
+
+// 迁移时没能改写的条目：文件已经不在了，或者那一行在最新内容里定位不到
+// （文件被外部改过）。用户需要知道具体是哪个文件的哪一行。
+export interface MigrationSkip {
+  path: string;
+  line: number;
+  reason: "file-missing" | "line-not-found";
+}
+
+export interface MigrationResult {
+  migrated: number;
+  skipped: MigrationSkip[];
+}
 
 export default class CashlogPlugin extends Plugin {
   settings: CashlogSettings = createDefaultSettings();
@@ -218,10 +231,18 @@ export default class CashlogPlugin extends Plugin {
   // 否则文件被外部改动（同步、其它编辑器）后会改写到别的行上。
   private async applyLineReplacements(
     fileChanges: Map<string, Map<number, { original: string; newLine: string }>>,
-  ): Promise<void> {
+  ): Promise<{ applied: number; skipped: MigrationSkip[] }> {
+    const skipped: MigrationSkip[] = [];
+    let applied = 0;
+
     for (const [filePath, lineChanges] of fileChanges) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file instanceof TFile)) continue;
+      if (!(file instanceof TFile)) {
+        for (const lineNumber of lineChanges.keys()) {
+          skipped.push({ path: filePath, line: lineNumber, reason: "file-missing" });
+        }
+        continue;
+      }
 
       await this.app.vault.process(file, (content) => {
         const lines = content.split("\n");
@@ -229,19 +250,34 @@ export default class CashlogPlugin extends Plugin {
         const changes = [...lineChanges.entries()].sort((a, b) => b[0] - a[0]);
         for (const [lineNumber, change] of changes) {
           const targetLine = resolveEntryLine(lines, change.original, lineNumber);
-          if (targetLine === null) continue;
+          if (targetLine === null) {
+            // 文件被外部改过，这一行已经定位不到了：跳过并记录下来，
+            // 而不是静默 continue —— 用户需要知道哪些条目没被迁移。
+            skipped.push({ path: filePath, line: lineNumber, reason: "line-not-found" });
+            continue;
+          }
           lines[targetLine] = change.newLine;
+          applied++;
         }
         return lines.join("\n");
       });
     }
+
+    return { applied, skipped };
   }
 
-  // 标签迁移：将缓存中所有旧标签替换为新标签，保留子标签
+  // 标签迁移：将缓存中所有旧标签替换为新标签，保留子标签。
+  // 返回成功条数，保持既有调用方不变；需要明细请用 migrateTagDetailed。
   async migrateTag(oldTag: string, newTag: string): Promise<number> {
+    const result = await this.migrateTagDetailed(oldTag, newTag);
+    return result.migrated;
+  }
+
+  // 同 migrateTag，但把没能改写的条目一并返回，
+  // 好让改名/删除弹窗能报告「哪几条在哪个文件的哪一行被跳过」。
+  async migrateTagDetailed(oldTag: string, newTag: string): Promise<MigrationResult> {
     const entries = this.cache.getEntries();
     const fileChanges = new Map<string, Map<number, { original: string; newLine: string }>>();
-    let migrationCount = 0;
 
     for (const entry of entries) {
       if (!entry.location) continue;
@@ -273,14 +309,24 @@ export default class CashlogPlugin extends Plugin {
         original: entry.originalMarkdown,
         newLine,
       });
-      migrationCount++;
     }
 
-    if (migrationCount === 0) return 0;
+    if (fileChanges.size === 0) return { migrated: 0, skipped: [] };
 
-    await this.applyLineReplacements(fileChanges);
+    const { applied, skipped } = await this.applyLineReplacements(fileChanges);
     await this.cache.reindex();
-    return migrationCount;
+    return { migrated: applied, skipped };
+  }
+
+  // 有多少条记录用到这个标签（含子标签），用于改名前提示影响面。
+  countTagUsages(tagPath: string): number {
+    const target = parseTagText(tagPath).toLowerCase();
+    return this.cache.getEntries().filter((entry) =>
+      entry.tags.some((t) => {
+        const low = parseTagText(t).toLowerCase();
+        return low === target || low.startsWith(target + "/");
+      }),
+    ).length;
   }
 
   // 按标签删除所有关联的记账条目

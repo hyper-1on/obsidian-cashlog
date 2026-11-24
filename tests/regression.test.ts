@@ -74,7 +74,14 @@ function parse(line: string, settings = makeSettings(), path = "账本.md"): Cas
 
 // 构造一个只暴露 EntryEditor 所需接口的假插件
 function fakePlugin(settings: CashlogSettings, entries: CashlogEntry[]) {
-  return { settings, cache: { getEntries: () => entries } } as never;
+  return {
+    settings,
+    cache: { getEntries: () => entries },
+    // 标签改名弹窗会问「有多少条历史记录」并在勾选后迁移。
+    // 默认按「没有历史记录」处理，需要验证迁移的用例自行覆盖这两个方法。
+    countTagUsages: () => 0,
+    migrateTagDetailed: async () => ({ migrated: 0, skipped: [] }),
+  } as never;
 }
 
 // ---------------------------------------------------------------- 查询指令
@@ -2571,7 +2578,7 @@ test("[静态] 面板右键菜单应提供「重命名此标签」，而不是�
 
   assert.ok(src.includes('t("panelSettings.renameTag")'), "右键菜单应使用「重命名此标签」文案");
   assert.ok(
-    src.includes("openSubTagRenameModal(row, node, tree, save)"),
+    src.includes("openSubTagRenameModal(row, plugin, node, tree, mainTag, save)"),
     "右键应调用重命名弹窗，直接改这个标签自己的名字",
   );
 });
@@ -2581,8 +2588,10 @@ test("[面板] 右键重命名的弹窗必须真的挂到 DOM 上", () => {
 
   openSubTagRenameModal(
     container as unknown as HTMLElement,
+    fakePlugin(makeSettings(), []),
     node,
     [node],
+    "#支出",
     async () => {},
   );
 
@@ -2594,4 +2603,46 @@ test("[面板] 右键重命名的弹窗必须真的挂到 DOM 上", () => {
     overlays[0].querySelector(".cashlog-tag-modal-input"),
     "弹窗里应有输入框",
   );
+});
+test("[面板] 改名弹窗应提示受影响的历史记录条数，并提供一起迁移的勾选", () => {
+  const container = new FakeElement("div");
+  const node = { name: "餐饮" };
+
+  const plugin = {
+    settings: makeSettings(),
+    cache: { getEntries: () => [] },
+    countTagUsages: () => 7,
+    migrateTagDetailed: async () => ({ migrated: 0, skipped: [] }),
+  };
+
+  openSubTagRenameModal(
+    container as unknown as HTMLElement,
+    plugin as never,
+    node,
+    [node],
+    "#支出",
+    async () => {},
+  );
+
+  const text = collectText(container);
+  assert.ok(text.includes("7"), `应提示有 7 条历史记录受影响，实际: ${text}`);
+  assert.ok(
+    text.includes("同时") || text.includes("一起"),
+    `应提供「同时更新」的勾选项，实际: ${text}`,
+  );
+
+  const checkboxes = container.querySelectorAll("input");
+  assert.ok(
+    checkboxes.some((el) => el.attrs["type"] === "checkbox" || el.type === "checkbox"),
+    "应有复选框",
+  );
+});
+
+test("[静态] 改名弹窗在勾选时应调用 migrateTagDetailed 并报告跳过项", () => {
+  assert.ok(SRC_DIR, "未能定位 src 目录");
+  const src = readFileSync(join(SRC_DIR, "PanelSettings.ts"), "utf8");
+
+  assert.ok(src.includes("plugin.migrateTagDetailed("), "确认时应走 migrateTagDetailed");
+  assert.ok(src.includes("result.skipped"), "应处理跳过的条目");
+  assert.ok(src.includes("path}:${s.line}"), "报告里应带 文件:行号");
 });
