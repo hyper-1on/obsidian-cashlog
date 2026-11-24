@@ -63,12 +63,28 @@ export class FakeElement {
   }
 
   empty(): void {
+    // 真实浏览器在移除一个仍有焦点的元素时会先派发 blur。
+    // 很多「点了没反应 / 状态错乱」就来自这条连锁（blur 回调又改了状态或再次渲染），
+    // 所以桩必须如实建模；否则重建导致的失焦后果永远测不出来。
+    // 每个 blur 回调自己负责防重入（done 标志），递归会在那里终止。
+    for (const focused of this.collectFocused()) focused.dispatch("blur", {});
     // 真实 DOM 移除子树后，这些元素不会再收到事件
     for (const child of this.children) child.markDetached();
     this.children = [];
     this.own = [];
     // 内容清空 → 高度塌陷 → 浏览器把 scrollTop 归零
     this.scrollTop = 0;
+  }
+
+  // 收集本子树里当前持有焦点的元素（按先序）
+  private collectFocused(): FakeElement[] {
+    const out: FakeElement[] = [];
+    const walk = (el: FakeElement): void => {
+      if (el.focused) out.push(el);
+      for (const child of el.children) walk(child);
+    };
+    walk(this);
+    return out;
   }
 
   // 与真实 DOM 的 classList 一致：允许一次传入多个类名（"a b" 拆成两个）。

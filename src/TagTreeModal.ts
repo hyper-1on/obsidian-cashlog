@@ -1,6 +1,6 @@
 import { App, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
 import { t, tp } from "./i18n";
-import { addChild, findNode, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
+import { addChild, findNode, parseTagText, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
 import type { TagNode } from "./TagTree";
 import { createSection } from "./ui/Section";
 
@@ -36,6 +36,13 @@ export class TagTreeModal extends Modal {
   private renaming: string | null = null;
   /** 当前打开的编辑器（用于局部收起） */
   private activeEditor: ActiveEditor | null = null;
+  /**
+   * 刚被按下的那一行按钮所属的 key。
+   * 浏览器顺序是 mousedown → 输入框 blur → mouseup → click，
+   * 所以失焦先于点击到达。没有这个标记就无法区分
+   * 「用户按了本行的按钮」（该由 click 决定开关）和「焦点真的跑掉了」（该关闭）。
+   */
+  private intentKey: string | null = null;
   /** 各分区根级新增框的当前输入 */
   private pending: Record<string, string> = {};
 
@@ -85,7 +92,8 @@ export class TagTreeModal extends Modal {
       }
 
       const body = createSection(contentEl, {
-        title: `${section.title}（${this.countNodes(roots)}）`,
+        // 分区标题通常就是主标签（"#支出"），显示时同样只留词条
+        title: `${parseTagText(section.title)}（${this.countNodes(roots)}）`,
         cls: "cashlog-tag-tree-section",
       });
 
@@ -182,16 +190,30 @@ export class TagTreeModal extends Modal {
     // 在按钮回调里才求值，所以可以先注册 handler 再赋值。
     let addHost: HTMLElement | null = null;
 
-    this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
+    // 改名：再次点击同一行等于收起
+    const renameBtn = this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
+      const wasOpen = this.renaming === key;
       this.stopEditing();
+      this.intentKey = null;
+      if (wasOpen) return;
       this.renaming = key;
       this.showRenameEditor(key, node, nameEl, editorSlot);
     });
+    renameBtn.addEventListener("mousedown", () => {
+      this.intentKey = key;
+    });
 
-    this.iconButton(actions, "plus", t("tagTree.addChild"), () => {
+    // 加子标签：再次点击同一行等于收起
+    const addBtn = this.iconButton(actions, "plus", t("tagTree.addChild"), () => {
+      const wasOpen = this.addingUnder === key;
       this.stopEditing();
+      this.intentKey = null;
+      if (wasOpen) return;
       this.addingUnder = key;
       this.showAddEditor(addHost ?? li, section, path);
+    });
+    addBtn.addEventListener("mousedown", () => {
+      this.intentKey = key;
     });
 
     // 删除：两次点击确认
@@ -316,7 +338,15 @@ export class TagTreeModal extends Modal {
       if (e.key === "Enter") finish(true);
       else if (e.key === "Escape") finish(false);
     });
-    text.inputEl.addEventListener("blur", () => finish(false));
+    text.inputEl.addEventListener("blur", () => {
+      // 失焦是本行按钮被按下造成的：交给那次 click 决定是收起还是切换。
+      // 这里抢先关掉，后面的 click 又会打开一次，「点同一个 + 想关掉」就变成关不掉。
+      if (this.intentKey !== null && this.intentKey === this.activeEditor?.key) {
+        this.intentKey = null; // 只豁免这一次，避免拖拽后标记残留导致再也关不掉
+        return;
+      }
+      finish(false);
+    });
   }
 
   // 新增子标签：输入行出现在目标节点下方（有子节点时落在子列表末尾）。
@@ -376,7 +406,15 @@ export class TagTreeModal extends Modal {
       if (e.key === "Enter") finish(true);
       else if (e.key === "Escape") finish(false);
     });
-    text.inputEl.addEventListener("blur", () => finish(false));
+    text.inputEl.addEventListener("blur", () => {
+      // 失焦是本行按钮被按下造成的：交给那次 click 决定是收起还是切换。
+      // 这里抢先关掉，后面的 click 又会打开一次，「点同一个 + 想关掉」就变成关不掉。
+      if (this.intentKey !== null && this.intentKey === this.activeEditor?.key) {
+        this.intentKey = null; // 只豁免这一次，避免拖拽后标记残留导致再也关不掉
+        return;
+      }
+      finish(false);
+    });
   }
 
   private countNodes(nodes: TagNode[]): number {

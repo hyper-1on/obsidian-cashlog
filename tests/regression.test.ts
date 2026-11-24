@@ -2220,3 +2220,41 @@ test("[标签] 图表弹窗的标签筛选按树渲染，且勾选项不显示 #
   assert.ok(text.includes("午餐"), `应显示段名「午餐」，实际: ${text}`);
   assert.ok(text.includes("餐饮"), `应显示中间层段名「餐饮」，实际: ${text}`);
 });
+test("[标签树] 再点一次同一行的 + 应关闭输入框，而不是关掉又打开", () => {
+  const modal = openTagTree([{ name: "餐饮" }]);
+  const plus = () => treeButton(treeTopItems(modal)[0], "plus");
+
+  plus().dispatch("click", {});
+  const input = treeContent(modal).querySelectorAll("input")[0];
+  assert.ok(input, "第一次点击应打开输入框");
+
+  // 真实浏览器的顺序：mousedown → 输入框 blur → mouseup → click
+  plus().dispatch("mousedown", {});
+  input.dispatch("blur", {});
+  plus().dispatch("click", {});
+
+  assert.equal(
+    treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing").length,
+    0,
+    "再点一次同一行的 + 应当关闭，现状是关闭后又重新打开",
+  );
+});
+
+test("[标签树] 再点一次同一行的改名按钮应关闭输入框", () => {
+  const modal = openTagTree([{ name: "餐饮" }]);
+  const pencil = () => treeButton(treeTopItems(modal)[0], "pencil");
+
+  pencil().dispatch("click", {});
+  const input = treeContent(modal).querySelectorAll("input")[0];
+  assert.ok(input, "第一次点击应打开改名输入框");
+
+  pencil().dispatch("mousedown", {});
+  input.dispatch("blur", {});
+  pencil().dispatch("click", {});
+
+  assert.equal(
+    visibleNameEditors(modal).length,
+    0,
+    "再点一次同一行的改名按钮应当关闭",
+  );
+});
