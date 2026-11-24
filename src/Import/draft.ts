@@ -23,6 +23,12 @@ export interface ImportDraft {
   entryType: "expense" | "income" | "transfer" | null;
   /** 主标签，如 #支出/餐饮；为空表示还没指定 */
   mainTag: string | null;
+  /**
+   * mainTag 的来源。
+   * inherited = 跟随所属分组（用户没单独改过）；
+   * manual    = 用户在这一条上单独指定过，组级再改时按策略决定是否覆盖。
+   */
+  tagSource: "inherited" | "manual";
   /** 附加标签（地点、必要性等） */
   extraTags: string[];
   /** 描述：默认由对方/商品拼出，用户可改 */
@@ -73,6 +79,7 @@ export function toDraft(record: ImportRecord): ImportDraft {
     record,
     entryType,
     mainTag: null,
+    tagSource: "inherited",
     extraTags: [],
     description,
     account: null,

@@ -45,6 +45,14 @@ import { parseMoney, normalizeTradeTime } from "../src/Import/values";
 import { toDrafts } from "../src/Import/draft";
 import { markDuplicates } from "../src/Import/dedupe";
 import { findTransferPairs, pairIndex } from "../src/Import/pairing";
+import {
+  groupDrafts,
+  groupTagState,
+  setGroupTag,
+  setDraftTag,
+  applyBatch,
+  countUntagged,
+} from "../src/Import/grouping";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2907,4 +2915,121 @@ test("[导入] 转账配对：支付宝样本里的成对划转能被识别", ()
   const index = pairIndex(pairs);
   assert.equal(index.get(pairs[0].out), pairs[0].in);
   assert.equal(index.get(pairs[0].in), pairs[0].out);
+});
+// ===== 导入：分组与批量标记 =====
+
+function makeDraft(over: Partial<import("../src/Import/draft").ImportDraft> = {}): import("../src/Import/draft").ImportDraft {
+  const record = {
+    source: "wechat_personal" as const,
+    rowIndex: 1,
+    tradeTime: "2026-01-05T08:12:00",
+    direction: "expense" as const,
+    amount: 10,
+    currency: "CNY",
+    balance: null,
+    counterparty: "示例超市",
+    category: null,
+    payMethod: "零钱",
+    status: null,
+    orderNo: null,
+    merchantOrderNo: null,
+    product: null,
+    note: null,
+    raw: {},
+  };
+  return {
+    record,
+    entryType: "expense",
+    mainTag: null,
+    tagSource: "inherited",
+    extraTags: [],
+    description: "示例描述",
+    account: null,
+    transferToAccount: null,
+    status: "new",
+    duplicateCount: 0,
+    selected: true,
+    ...over,
+  };
+}
+
+test("[导入] 分组：按对方聚合且保持账单顺序", () => {
+  const drafts = [
+    makeDraft({ record: { ...makeDraft().record, counterparty: "示例A", rowIndex: 1 } }),
+    makeDraft({ record: { ...makeDraft().record, counterparty: "示例B", rowIndex: 2 } }),
+    makeDraft({ record: { ...makeDraft().record, counterparty: "示例A", rowIndex: 3 } }),
+  ];
+
+  const groups = groupDrafts(drafts);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0].key, "示例A");
+  assert.equal(groups[0].drafts.length, 2);
+  assert.deepEqual(
+    groups[0].drafts.map((d) => d.record.rowIndex),
+    [1, 3],
+    "组内应保持账单原顺序",
+  );
+});
+
+test("[导入] 组标签状态：空 / 统一 / 自定义", () => {
+  const group = { key: "示例超市", drafts: [makeDraft(), makeDraft()], defaultTag: null };
+
+  assert.equal(groupTagState(group).kind, "empty", "都没设时是空");
+
+  setGroupTag(group, "#支出/餐饮");
+  const uniform = groupTagState(group);
+  assert.equal(uniform.kind, "uniform");
+  assert.equal(uniform.tag, "#支出/餐饮");
+
+  setDraftTag(group.drafts[0], "#支出/购物");
+  assert.equal(groupTagState(group).kind, "mixed", "组内不一致时应显示自定义");
+});
+
+test("[导入] 组级改标签默认覆盖手动例外", () => {
+  const group = { key: "示例超市", drafts: [makeDraft(), makeDraft()], defaultTag: null };
+  setDraftTag(group.drafts[0], "#支出/购物");
+
+  setGroupTag(group, "#支出/餐饮");
+
+  assert.ok(
+    group.drafts.every((d) => d.mainTag === "#支出/餐饮"),
+    "默认应把整组统一",
+  );
+  assert.ok(
+    group.drafts.every((d) => d.tagSource === "inherited"),
+    "覆盖后来源回到继承",
+  );
+});
+
+test("[导入] overwriteManual=false 时保留手动改过的条目", () => {
+  const group = { key: "示例超市", drafts: [makeDraft(), makeDraft()], defaultTag: null };
+  setDraftTag(group.drafts[0], "#支出/购物");
+
+  setGroupTag(group, "#支出/餐饮", { overwriteManual: false });
+
+  assert.equal(group.drafts[0].mainTag, "#支出/购物", "手动改过的不应被覆盖");
+  assert.equal(group.drafts[1].mainTag, "#支出/餐饮", "未改过的应跟随组级");
+});
+
+test("[导入] 批量应用：标签、描述、附加标签一次写完", () => {
+  const drafts = [makeDraft(), makeDraft()];
+
+  applyBatch(drafts, {
+    mainTag: "#支出/餐饮/午餐",
+    description: "午餐",
+    addExtraTags: ["#地点/学校"],
+  });
+
+  assert.ok(drafts.every((d) => d.mainTag === "#支出/餐饮/午餐"));
+  assert.ok(drafts.every((d) => d.description === "午餐"));
+  assert.ok(drafts.every((d) => d.extraTags.includes("#地点/学校")));
+
+  // 只给描述时不应动标签
+  applyBatch(drafts, { description: "改过的描述" });
+  assert.ok(drafts.every((d) => d.mainTag === "#支出/餐饮/午餐"));
+});
+
+test("[导入] 未指定标签的条数统计", () => {
+  const drafts = [makeDraft(), makeDraft({ mainTag: "#支出/餐饮" }), makeDraft()];
+  assert.equal(countUntagged(drafts), 2);
 });
