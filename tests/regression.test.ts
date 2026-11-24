@@ -40,6 +40,7 @@ import { renderPanelSettings } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import type { TagNode } from "../src/TagTree";
+import type { TreeSection } from "../src/TagTreeModal";
 
 // Obsidian 把 activeDocument 作为全局提供（src 里直接引用，并非模块 import）。
 // 这里挂到 globalThis，使面板设置的渲染逻辑可以在 Node 下运行并断言其 DOM 结构。
@@ -1976,13 +1977,20 @@ function isInside(el: FakeElement, ancestor: FakeElement): boolean {
   return false;
 }
 
+// 改名输入框的槽位每行都有一个（默认隐藏），真正打开的只有一个
+function visibleNameEditors(modal: TagTreeModal): FakeElement[] {
+  return treeContent(modal)
+    .querySelectorAll(".cashlog-tag-tree-name-editor")
+    .filter((slot) => !slot.hasClass("is-hidden"));
+}
+
 test("[标签树] 改名输入框应覆盖在标签名字的位置，而不是排到子标签之后", () => {
   const modal = openTagTree([{ name: "餐饮", children: [{ name: "午餐" }] }]);
   const canteen = treeTopItems(modal).find((li) => treeNameOf(li) === "餐饮")!;
   treeButton(canteen, "pencil").dispatch("click", {});
 
   const li = treeTopItems(modal)[0];
-  const editor = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing")[0];
+  const editor = visibleNameEditors(modal)[0];
   assert.ok(editor, "点改名后应出现输入框");
 
   // 「覆盖在名字之上」= 输入框就在名字那一行里。
@@ -2007,4 +2015,75 @@ test("[标签树] 每个分类最后一项母标签也能添加子标签", () =>
 
   const top = treeTopItems(modal);
   assert.ok(isInside(editor, top[top.length - 1]), "输入行应挂在该节点之下");
+});
+﻿
+// 跨分类同名标签：支出/1 与 收入/1 是两棵树上两个不同的节点，
+// 但编辑态原先只记裸路径，于是两处同时命中。
+function openTagTreeSections(sections: TreeSection[]): TagTreeModal {
+  const modal = new TagTreeModal({} as never, sections, () => {});
+  modal.open();
+  return modal;
+}
+
+function sectionTopItems(section: FakeElement): FakeElement[] {
+  const ul = section.querySelectorAll("ul")[0];
+  return ul.children.filter((c) => c.tag === "li");
+}
+
+test("[标签树] 不同分类下的同名标签不应互相干扰", () => {
+  const modal = openTagTreeSections([
+    { key: "expense", title: "支出", nodes: [{ name: "1" }] },
+    { key: "income", title: "收入", nodes: [{ name: "1" }] },
+  ]);
+
+  const sections = treeContent(modal).querySelectorAll(".cashlog-section");
+  assert.equal(sections.length, 2, "应渲染两个分类");
+
+  treeButton(sectionTopItems(sections[0])[0], "plus").dispatch("click", {});
+
+  const editors = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing");
+  assert.equal(
+    editors.length,
+    1,
+    `只应在被点击的那个分类下出现一个输入框，实际 ${editors.length} 个`,
+  );
+
+  const after = treeContent(modal).querySelectorAll(".cashlog-section");
+  assert.ok(isInside(editors[0], after[0]), "输入框应出现在「支出」分类下，而不是「收入」");
+});
+
+test("[标签树] 不同分类下的同名标签，改名也互不干扰", () => {
+  const modal = openTagTreeSections([
+    { key: "expense", title: "支出", nodes: [{ name: "1" }] },
+    { key: "income", title: "收入", nodes: [{ name: "1" }] },
+  ]);
+
+  const sections = treeContent(modal).querySelectorAll(".cashlog-section");
+  treeButton(sectionTopItems(sections[0])[0], "pencil").dispatch("click", {});
+
+  const editors = visibleNameEditors(modal);
+  assert.equal(editors.length, 1, `只应有一个改名输入框，实际 ${editors.length} 个`);
+});
+﻿
+test("[标签树] 打开一处输入框后，点另一行的 + 应能打开新的，而不是只收起", () => {
+  const modal = openTagTree([{ name: "餐饮" }, { name: "交通" }]);
+
+  treeButton(treeTopItems(modal)[0], "plus").dispatch("click", {});
+  const firstRow = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing")[0];
+  const input = firstRow.querySelectorAll("input")[0];
+  assert.ok(input, "第一处应出现输入框");
+
+  // 真实浏览器的顺序：mousedown 先让当前输入框失焦，随后 click 才到达目标按钮。
+  // 若失焦重建了整棵树，目标按钮已被移除，click 不会送达 —— 表现就是「只收起、不打开」。
+  const target = treeButton(treeTopItems(modal)[1], "plus");
+  input.dispatch("blur", {});
+  assert.ok(target.isAttached(), "失焦不应销毁其它行的按钮，否则随后的点击会落空");
+
+  target.dispatch("click", {});
+
+  const editors = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing");
+  assert.equal(editors.length, 1, `应只剩新打开的那一个输入框，实际 ${editors.length} 个`);
+
+  const top = treeTopItems(modal);
+  assert.ok(isInside(editors[0], top[1]), "输入框应挂在「交通」之下");
 });

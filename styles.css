@@ -2251,3 +2251,18 @@ body.theme-dark .cashlog-settings-content {
   min-width: 0;
   margin: 0;
 }
+
+/* 名字与改名输入框共用一个槽位，靠切换显隐来「覆盖」，不再多占一行 */
+.cashlog-tag-tree-name.is-hidden,
+.cashlog-tag-tree-name-editor.is-hidden {
+  display: none;
+}
+
+/* 标签树弹窗的内容高度会变：展开输入行、增删标签都会改。
+   Modal 默认垂直居中，内容一变高就整体上移，看起来像弹窗自己在漂。
+   改成从顶部固定起算，高度变化只影响下边缘。 */
+.modal:has(.cashlog-tag-tree-modal) {
+  align-self: flex-start;
+  margin-top: 8vh;
+  max-height: 84vh;
+}

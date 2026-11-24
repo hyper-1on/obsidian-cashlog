@@ -1,4 +1,4 @@
-import { App, Menu, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
+import { App, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
 import { t, tp } from "./i18n";
 import { addChild, findNode, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
 import type { TagNode } from "./TagTree";
@@ -8,6 +8,16 @@ export interface TreeSection {
   key: string;
   title: string;
   nodes: TagNode[];
+}
+
+// 同一时刻只允许一处编辑（改名或新增子标签）。
+// 用它把「退出编辑态」变成一次局部还原：只动这一行的 DOM，不重建整棵树。
+// 重建会连带销毁其它行的按钮，而真实浏览器不会把随后的 click 送给已被移除的元素 —
+// 于是「先点一个 +，再点另一个 +」表现为只收起、不打开。
+interface ActiveEditor {
+  key: string;
+  /** 收起编辑态：只还原这一处的 DOM */
+  close: () => void;
 }
 
 // 标签总览：树形展示「支出 / 收入 / 附加维度」下的全部标签，可在任意节点增删改。
@@ -20,10 +30,12 @@ export class TagTreeModal extends Modal {
   /** 只看这一支（undefined = 显示全部） */
   private readonly focusPath: string[] | undefined;
 
-  /** 正在给哪个路径新增子标签（null = 不在新增状态） */
+  /** 正在给哪个节点新增子标签（null = 不在新增状态） */
   private addingUnder: string | null = null;
-  /** 正在给哪个路径改名（null = 不在改名状态） */
+  /** 正在给哪个节点改名（null = 不在改名状态） */
   private renaming: string | null = null;
+  /** 当前打开的编辑器（用于局部收起） */
+  private activeEditor: ActiveEditor | null = null;
   /** 各分区根级新增框的当前输入 */
   private pending: Record<string, string> = {};
 
@@ -52,6 +64,9 @@ export class TagTreeModal extends Modal {
 
     // 重建会重置内部滚动位置，先存后还，避免新增标签后视图跳回顶部
     const scrollTop = contentEl.scrollTop;
+
+    // 旧 DOM 即将被丢弃，旧的 close 回调指向的元素也随之失效
+    this.activeEditor = null;
 
     contentEl.empty();
     contentEl.addClass("cashlog-tag-tree-modal");
@@ -131,6 +146,13 @@ export class TagTreeModal extends Modal {
     await this.render();
   }
 
+  // 编辑态的键必须带上分类：支出/1 与 收入/1 分属两棵树，是两个不同节点。
+  // 只记裸路径会让同名节点同时进入编辑态，而多个输入框抢焦点时，
+  // 后一个 focus 会让前一个 blur，blur 又清掉编辑态 —— 表现为「怎么点都打不开」。
+  private keyOf(section: TreeSection, path: string[]): string {
+    return `${section.key}\u0000${path.join("/")}`;
+  }
+
   private renderNode(
     parentUl: HTMLElement,
     section: TreeSection,
@@ -141,31 +163,35 @@ export class TagTreeModal extends Modal {
 
     const row = li.createDiv({ cls: "cashlog-tag-tree-row" });
 
-    // 改名时输入框占据名字本身的槽位（覆盖在原名字上），
-    // 而不是像新增那样在行下方另起一行 —— 两种操作的语义不同，视觉也应不同。
-    if (this.renaming === path.join("/")) {
-      const slot = row.createDiv({
-        cls: "cashlog-tag-tree-name-editor cashlog-tag-tree-row-editing",
-      });
-      this.renameInput(slot, node);
-    } else {
-      const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
-      nameEl.setAttribute("title", path.join("/"));
-    }
+    const key = this.keyOf(section, path);
+
+    const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
+    nameEl.setAttribute("title", path.join("/"));
+
+    // 改名输入框的槽位常驻、默认隐藏：进出改名态只切换这一处显隐，
+    // 输入框因此可以「覆盖在名字上」，而不是在行下方另起一行。
+    // 注意不要复用 .cashlog-tag-tree-row-editing：那个类标识「本行是新增输入行」，
+    // 每行都有的隐藏槽位若也带上它，按类查找就会把所有行都算成编辑器。
+    const editorSlot = row.createDiv({
+      cls: "cashlog-tag-tree-name-editor is-hidden",
+    });
 
     const actions = row.createDiv({ cls: "cashlog-tag-tree-actions" });
 
-    // 改名：进入改名态，输入框会替换这一行的名字
+    // 新增输入行的挂载点：有子标签时落在子列表末尾，否则紧跟本行。
+    // 在按钮回调里才求值，所以可以先注册 handler 再赋值。
+    let addHost: HTMLElement | null = null;
+
     this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
-      this.renaming = path.join("/");
-      this.addingUnder = null;
-      void this.render();
+      this.stopEditing();
+      this.renaming = key;
+      this.showRenameEditor(key, node, nameEl, editorSlot);
     });
 
-    // 加子标签：进入新增态，输入行会插在这个 li 的子列表末尾
     this.iconButton(actions, "plus", t("tagTree.addChild"), () => {
-      this.addingUnder = path.join("/");
-      void this.render();
+      this.stopEditing();
+      this.addingUnder = key;
+      this.showAddEditor(addHost ?? li, section, path);
     });
 
     // 删除：两次点击确认
@@ -183,6 +209,7 @@ export class TagTreeModal extends Modal {
         return;
       }
       void (async () => {
+        this.stopEditing();
         removeNode(section.nodes, path);
         pruneEmptyNodes(section.nodes);
         await this.onChange();
@@ -195,35 +222,17 @@ export class TagTreeModal extends Modal {
     // 子节点用嵌套 <ul>
     const children = node.children ?? [];
     const childUl = children.length > 0 ? li.createEl("ul", { cls: "cashlog-tag-tree-list" }) : null;
+    addHost = childUl ?? li;
     for (const child of children) {
       this.renderNode(childUl!, section, child, [...path, child.name]);
     }
 
-    // 新增输入行：放在这个 li 的最后（即子树之后），不覆盖节点本身
-    if (this.addingUnder === path.join("/")) {
-      // 直接把输入行挂到子列表（或本 li）上，inlineInput 自己会建行
-      this.inlineInput(
-        childUl ?? li,
-        "",
-        (value) => {
-          const trimmed = value.trim();
-          if (trimmed === "") return;
-          const check = validateTagSegment(trimmed);
-          if (!check.valid) {
-            new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-            return;
-          }
-          if (!addChild(section.nodes, path, trimmed)) {
-            new Notice(tp("tagTree.exists", { name: trimmed }));
-            return;
-          }
-          this.addingUnder = null;
-          void this.onChange();
-        },
-        () => {
-          this.addingUnder = null;
-        },
-      );
+    // 重建时若仍处于编辑态，按状态把输入框装回去
+    if (this.renaming === key) {
+      this.showRenameEditor(key, node, nameEl, editorSlot);
+    }
+    if (this.addingUnder === key) {
+      this.showAddEditor(addHost, section, path);
     }
   }
 
@@ -241,11 +250,33 @@ export class TagTreeModal extends Modal {
     return btn;
   }
 
-  // 改名输入框：直接占据标签名字的槽位，预填原名并全选。
-  // 回车提交、Esc 或失焦取消；无论哪条路径都要清掉 renaming 再重建，
-  // 否则下一次 render 会继续把这一行渲染成输入框。
-  private renameInput(host: HTMLElement, node: TagNode): void {
-    const text = new TextComponent(host);
+  // 收起当前编辑态：只还原那一处 DOM，不重建整棵树
+  private stopEditing(): void {
+    this.activeEditor?.close();
+    this.activeEditor = null;
+    this.renaming = null;
+    this.addingUnder = null;
+  }
+
+  // 改名：输入框占据名字的槽位。取消时只把名字换回来，
+  // 提交才重建（名字变了，分组/计数都要跟着更新）。
+  private showRenameEditor(
+    key: string,
+    node: TagNode,
+    nameEl: HTMLElement,
+    slot: HTMLElement,
+  ): void {
+    nameEl.addClass("is-hidden");
+    slot.removeClass("is-hidden");
+
+    const close = (): void => {
+      slot.addClass("is-hidden");
+      slot.empty();
+      nameEl.removeClass("is-hidden");
+    };
+    this.activeEditor = { key, close };
+
+    const text = new TextComponent(slot);
     text.setValue(node.name);
     text.inputEl.addClass("cashlog-tag-tree-input");
     text.inputEl.focus();
@@ -262,15 +293,23 @@ export class TagTreeModal extends Modal {
           const check = validateTagSegment(trimmed);
           if (!check.valid) {
             new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-          } else {
-            node.name = trimmed;
-            void this.onChange();
+            // 输入本身有问题：保持打开，让用户就地改
+            done = false;
+            return;
           }
+          node.name = trimmed;
+          this.renaming = null;
+          this.activeEditor = null;
+          void this.onChange();
+          void this.render();
+          return;
         }
       }
 
+      // 取消 / 没改动：就地收起，不重建
       this.renaming = null;
-      void this.render();
+      this.activeEditor = null;
+      close();
     };
 
     text.inputEl.addEventListener("keydown", (e) => {
@@ -280,28 +319,57 @@ export class TagTreeModal extends Modal {
     text.inputEl.addEventListener("blur", () => finish(false));
   }
 
-  // 新增子标签的输入行：出现在目标节点下方（没有子节点时紧随其行，有子节点时落在子列表末尾）
-  private inlineInput(
-    host: HTMLElement,
-    initial: string,
-    onDone: (value: string) => void,
-    onCancel?: () => void,
-  ): void {
-    const row = host.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
+  // 新增子标签：输入行出现在目标节点下方（有子节点时落在子列表末尾）。
+  private showAddEditor(parent: HTMLElement, section: TreeSection, path: string[]): void {
+    const row = parent.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
+
+    const close = (): void => {
+      row.remove();
+    };
+    this.activeEditor = { key: this.keyOf(section, path), close };
 
     const text = new TextComponent(row);
-    text.setValue(initial);
     text.inputEl.addClass("cashlog-tag-tree-input");
     text.inputEl.focus();
-    text.inputEl.select();
 
     let done = false;
     const finish = (commit: boolean): void => {
       if (done) return;
       done = true;
-      if (commit) onDone(text.getValue());
-      else onCancel?.();
-      void this.render();
+
+      if (commit) {
+        const trimmed = text.getValue().trim();
+
+        // 空输入等同取消
+        if (trimmed === "") {
+          this.addingUnder = null;
+          this.activeEditor = null;
+          close();
+          return;
+        }
+
+        const check = validateTagSegment(trimmed);
+        if (!check.valid) {
+          new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
+          done = false;
+          return;
+        }
+        if (!addChild(section.nodes, path, trimmed)) {
+          new Notice(tp("tagTree.exists", { name: trimmed }));
+          done = false;
+          return;
+        }
+
+        this.addingUnder = null;
+        this.activeEditor = null;
+        void this.onChange();
+        void this.render();
+        return;
+      }
+
+      this.addingUnder = null;
+      this.activeEditor = null;
+      close();
     };
 
     text.inputEl.addEventListener("keydown", (e) => {
