@@ -2087,3 +2087,64 @@ test("[标签树] 打开一处输入框后，点另一行的 + 应能打开新�
   const top = treeTopItems(modal);
   assert.ok(isInside(editors[0], top[1]), "输入框应挂在「交通」之下");
 });
+
+// ===== 父子同名标签（#支出/餐饮 与 #支出/餐饮/餐饮）=====
+// 它们确实同属「餐饮」这一支，所以 tag includes 一起命中是分支语义的正确结果；
+// 想只取子标签时写完整路径即可。
+// 注意 tag includes 的路径按文档要带 #（e.tags 存的是 "#支出/餐饮"）。
+test("[标签] 父子同名时 tag includes 按分支正确筛选", () => {
+  const settings = makeSettings();
+  const plain = parse("- #支出 无子标签 💴-5 ➕2026-09-22", settings)!;
+  const parent = parse("- #支出/餐饮 父 💴-10 ➕2026-09-22", settings)!;
+  const child = parse("- #支出/餐饮/餐饮 同名子 💴-20 ➕2026-09-22", settings)!;
+  const sibling = parse("- #支出/交通 别的 💴-30 ➕2026-09-22", settings)!;
+
+  const branch = parseFilter("tag includes #支出", settings);
+  assert.ok(branch?.filter);
+  assert.equal(branch.filter(plain), true, "主标签自身命中");
+  assert.equal(branch.filter(parent), true, "子标签命中该分支");
+  assert.equal(branch.filter(child), true, "同名孙标签同样命中该分支");
+  assert.equal(branch.filter(sibling), true, "另一分支也属于支出");
+
+  const exact = parseFilter("tag includes #支出/餐饮", settings);
+  assert.ok(exact?.filter);
+  assert.equal(exact.filter(plain), false, "父路径不应命中更上层的 #支出");
+  assert.equal(exact.filter(parent), true, "父标签命中");
+  assert.equal(exact.filter(child), true, "同名子标签同属该分支，应命中");
+  assert.equal(exact.filter(sibling), false, "其它分支不应命中");
+
+  // 只取同名子标签：写完整路径即可，父子同名不会互相覆盖
+  const deeper = parseFilter("tag includes #支出/餐饮/餐饮", settings);
+  assert.ok(deeper?.filter);
+  assert.equal(deeper.filter(child), true, "完整路径命中同名子标签");
+  assert.equal(deeper.filter(parent), false, "完整路径不应命中父标签");
+});
+
+test("[标签] 父子同名在 group by tag <路径> 下仍是两个独立的组", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮 父 💴-10 ➕2026-09-22", settings),
+    parse("- #支出/餐饮/餐饮 同名子 💴-20 ➕2026-09-22", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const keys = new Query("group by tag 餐饮", settings).apply(entries).groups.map((g) => g.key);
+  assert.ok(keys.includes("支出/餐饮"), `应有「支出/餐饮」组，实际: ${keys.join(" | ")}`);
+  assert.ok(
+    keys.includes("支出/餐饮/餐饮"),
+    `应有「支出/餐饮/餐饮」组，实际: ${keys.join(" | ")}`,
+  );
+});
+
+test("[对照] group by tag 一级汇总时子标签并入父标签，这与同名无关", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮 父 💴-10 ➕2026-09-22", settings),
+    parse("- #支出/餐饮/餐饮 同名子 💴-20 ➕2026-09-22", settings),
+    parse("- #支出/餐饮/午餐 午餐 💴-30 ➕2026-09-22", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const groups = new Query("group by tag", settings).apply(entries).groups;
+  assert.equal(groups.length, 1, "一级汇总下三个条目同属「支出/餐饮」");
+  assert.equal(groups[0].key, "支出/餐饮");
+  assert.equal(groups[0].entries.length, 3, "三个条目都应归入该组");
+});
