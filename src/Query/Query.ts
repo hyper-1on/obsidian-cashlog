@@ -768,7 +768,8 @@ export class Query {
               });
 
               if (!matched) {
-                keyOptions.push([t("group.noTag")]);
+                // 指定了路径就只看这一支：不属于它的记录直接跳过，
+                // 否则会多出一个「无标签」分组，把无关条目混进统计。
                 break;
               }
 

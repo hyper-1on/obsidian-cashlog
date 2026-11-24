@@ -5,6 +5,9 @@ import type CashlogPlugin from "./main";
 import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { validateSubTagName, validateAccountName } from "./TagValidation";
+import { SubTagManagerModal } from "./SubTagManagerModal";
+import { pruneEmptyNodes } from "./TagTree";
+import type { TagNode } from "./TagTree";
 import { t, tp, formatMoney } from "./i18n";
 import { getErrorMessage } from "./ErrorUtils";
 
@@ -105,9 +108,12 @@ export function renderPanelSettings(container: HTMLElement, plugin: CashlogPlugi
       });
     }
 
-    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeSubTags, s.incomeTag, plugin);
+    renderSubTagList(content, t("panelSettings.incomeSubTags"), s.incomeTagTree ?? [], plugin);
 
-    renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseSubTags, s.expenseTag, plugin);
+    renderSubTagList(content, t("panelSettings.expenseSubTags"), s.expenseTagTree ?? [], plugin);
+
+  // 附加标签维度：可自由命名（地点、必要性……），每个维度下可再挂值
+  renderSubTagList(content, t("panelSettings.extraTagDimensions"), s.extraTagTrees ?? [], plugin);
   });
 
   // ========== 账户设置 ==========
@@ -602,12 +608,13 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
 }
 
 // 子标签 chip 列表：合并 settings 子标签 + 缓存中发现的子标签
+// 子标签列表：直接读写标签树（不再用旧的扁平数组）。
+// 左键点 chip 进入子标签管理（可继续往下钻，层级不限），"+" 添加根节点。
 function renderSubTagList(
   container: HTMLElement,
   label: string,
-  settingsSubTags: string[],
-  baseTag: string,
-  plugin: CashlogPlugin
+  tree: TagNode[],
+  plugin: CashlogPlugin,
 ): void {
   const row = activeDocument.createElement("div");
   row.className = "cashlog-settings-row";
@@ -622,68 +629,33 @@ function renderSubTagList(
   chipContainer.className = "cashlog-subtag-chips";
   row.appendChild(chipContainer);
 
-  // 合并 settings 和缓存中发现的子标签（去重，保持顺序）
-  const cacheSubTags = discoverSubTagsFromCache(baseTag, plugin);
-  const allSubTags: string[] = [...settingsSubTags];
-  for (const sub of cacheSubTags) {
-    if (!allSubTags.includes(sub)) {
-      allSubTags.push(sub);
-    }
-  }
-
-  // 刷新回调：重新渲染面板
-  const refreshPanel = () => {
+  const save = async (): Promise<void> => {
+    pruneEmptyNodes(tree);
+    await plugin.saveSettings();
     const panelContent = container.closest(".cashlog-panel-content");
-    if (panelContent) {
-      renderPanelSettings(panelContent as HTMLElement, plugin);
-    }
+    if (panelContent) renderPanelSettings(panelContent as HTMLElement, plugin);
   };
 
-  // 渲染每个子标签 chip
-  for (const subTag of allSubTags) {
-    const isFromCache = !settingsSubTags.includes(subTag);
-
+  for (const node of tree) {
     const chip = activeDocument.createElement("span");
     chip.className = "cashlog-subtag-chip";
-    if (isFromCache) {
-      chip.classList.add("cashlog-subtag-chip-cache");
-    }
-    chip.textContent = subTag;
+    // 有子标签时给个数量提示，让"下面还有一层"可见
+    const childCount = node.children?.length ?? 0;
+    chip.textContent = childCount > 0 ? `${node.name} (${childCount})` : node.name;
 
-    // 右键菜单
-    chip.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const menu = new Menu();
-      menu.addItem((item) => {
-        item
-          .setTitle(t("panelSettings.modifySubTag"))
-          .setIcon("pencil")
-          .onClick(() => {
-            openEditSubTagModal(container, subTag, settingsSubTags, baseTag, plugin, refreshPanel);
-          });
-      });
-      menu.addItem((item) => {
-        item
-          .setTitle(t("panelSettings.deleteItem"))
-          .setIcon("trash")
-          .onClick(() => {
-            openDeleteSubTagDialog(container, subTag, settingsSubTags, baseTag, plugin, refreshPanel);
-          });
-      });
-      menu.showAtMouseEvent(e);
+    // 左键：进入管理弹窗（此前只有右键菜单，左键点了没反应）
+    chip.addEventListener("click", () => {
+      new SubTagManagerModal(plugin.app, tree, [node.name], save).open();
     });
 
     chipContainer.appendChild(chip);
   }
 
-  // + 添加按钮
   const addChip = activeDocument.createElement("span");
   addChip.className = "cashlog-subtag-chip cashlog-subtag-add";
   addChip.textContent = "+";
   addChip.addEventListener("click", () => {
-    openAddSubTagModal(container, settingsSubTags, plugin, refreshPanel);
+    new SubTagManagerModal(plugin.app, tree, [], save).open();
   });
   chipContainer.appendChild(addChip);
 }

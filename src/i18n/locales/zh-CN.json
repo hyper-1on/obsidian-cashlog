@@ -459,5 +459,19 @@
   "view.tab.dashboard": "仪表盘",
   "view.tab.settings": "设置",
   "view.backToDashboard": "← 返回仪表盘",
-  "view.pieChartTitle": "支出分类分布"
+  "view.pieChartTitle": "支出分类分布",
+  "subTagManager.rootTitle": "标签管理",
+  "subTagManager.title": "{name} 的子标签",
+  "subTagManager.empty": "还没有子标签",
+  "subTagManager.nodeMissing": "该标签已不存在",
+  "subTagManager.enter": "进入下一层",
+  "subTagManager.remove": "删除",
+  "subTagManager.addTitle": "新增子标签",
+  "subTagManager.addPlaceholder": "如：午餐",
+  "subTagManager.addButton": "添加",
+  "subTagManager.invalid": "名称不合法：{reason}",
+  "subTagManager.exists": "{name} 已存在",
+  "subTagManager.removed": "已删除 {name}"
+,
+  "panelSettings.extraTagDimensions": "附加标签维度"
 }

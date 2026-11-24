@@ -459,5 +459,19 @@
   "view.tab.dashboard": "Dashboard",
   "view.tab.settings": "Settings",
   "view.backToDashboard": "← Back to Dashboard",
-  "view.pieChartTitle": "Expense Category Distribution"
+  "view.pieChartTitle": "Expense Category Distribution",
+  "subTagManager.rootTitle": "Manage tags",
+  "subTagManager.title": "Sub-tags of {name}",
+  "subTagManager.empty": "No sub-tags yet",
+  "subTagManager.nodeMissing": "This tag no longer exists",
+  "subTagManager.enter": "Go one level deeper",
+  "subTagManager.remove": "Delete",
+  "subTagManager.addTitle": "Add sub-tag",
+  "subTagManager.addPlaceholder": "e.g. Lunch",
+  "subTagManager.addButton": "Add",
+  "subTagManager.invalid": "Invalid name: {reason}",
+  "subTagManager.exists": "{name} already exists",
+  "subTagManager.removed": "Deleted {name}"
+,
+  "panelSettings.extraTagDimensions": "Extra tag dimensions"
 }
