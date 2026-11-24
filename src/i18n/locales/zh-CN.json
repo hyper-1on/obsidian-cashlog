@@ -490,4 +490,6 @@
   "tagTree.renamePrompt": "新名称",
   "tagTree.addChildPrompt": "为「{name}」添加子标签",
   "panelSettings.manageAllTags": "管理所有标签"
+,
+  "tagTree.childrenTitle": "子标签"
 }

@@ -662,16 +662,47 @@ function renderSubTagList(
     const childCount = node.children?.length ?? 0;
     chip.textContent = childCount > 0 ? `${node.name} (${childCount})` : node.name;
 
-    // 左键与右键都走同一个树弹窗：只有一套交互，不存在「▸ 展开」和「缩进」两种表达
+    // 左键：只看这个标签下的子层级（带 focusPath），不把整棵树摊开
     chip.addEventListener("click", () => {
-      new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save).open();
+      new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save, [node.name]).open();
     });
 
-    // 右键：同一入口（保留，符合桌面端习惯）
+    // 右键：只给改名和删除，和「账户列表」的右键菜单保持一致
     chip.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save).open();
+
+      const menu = new Menu();
+
+      menu.addItem((item) => {
+        item
+          .setTitle(t("panelSettings.modifySubTag"))
+          .setIcon("pencil")
+          .onClick(() => {
+            new TagTreeModal(
+              plugin.app,
+              [{ key: "tree", title: label, nodes: tree }],
+              save,
+              [node.name],
+            ).open();
+          });
+      });
+
+      menu.addItem((item) => {
+        item
+          .setTitle(t("panelSettings.deleteItem"))
+          .setIcon("trash")
+          .onClick(() => {
+            void (async () => {
+              const idx = tree.findIndex((n) => n.name === node.name);
+              if (idx !== -1) tree.splice(idx, 1);
+              pruneEmptyNodes(tree);
+              await save();
+            })();
+          });
+      });
+
+      menu.showAtMouseEvent(e);
     });
 
     chipContainer.appendChild(chip);

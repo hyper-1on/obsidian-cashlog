@@ -1,6 +1,6 @@
-import { App, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
+import { App, Menu, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
 import { t, tp } from "./i18n";
-import { addChild, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
+import { addChild, findNode, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
 import type { TagNode } from "./TagTree";
 import { createSection } from "./ui/Section";
 
@@ -12,21 +12,29 @@ export interface TreeSection {
 
 // 标签总览：树形展示「支出 / 收入 / 附加维度」下的全部标签，可在任意节点增删改。
 //
-// 只有一个弹窗：此前还有逐层进入的 SubTagManagerModal，两套交互（▸ 展开 vs 缩进、
-// × vs ✕）容易让人以为功能不同。树形平铺能一次看到全貌，也就不需要"返回上一级"。
+// 层级用 <ul>/<li> 表达（和 Markdown 无序列表一致），不再靠 padding 模拟缩进。
+// 指定 focusPath 时只渲染该节点的子树 —— 从某个 chip 点进来时只关心它下面有什么。
 export class TagTreeModal extends Modal {
   private readonly sections: TreeSection[];
   private readonly onChange: () => Promise<void> | void;
+  /** 只看这一支（undefined = 显示全部） */
+  private readonly focusPath: string[] | undefined;
 
   /** 正在给哪个路径新增子标签（null = 不在新增状态） */
   private addingUnder: string | null = null;
   /** 各分区根级新增框的当前输入 */
   private pending: Record<string, string> = {};
 
-  constructor(app: App, sections: TreeSection[], onChange: () => Promise<void> | void) {
+  constructor(
+    app: App,
+    sections: TreeSection[],
+    onChange: () => Promise<void> | void,
+    focusPath?: string[],
+  ) {
     super(app);
     this.sections = sections;
     this.onChange = onChange;
+    this.focusPath = focusPath;
   }
 
   onOpen(): void {
@@ -45,69 +53,91 @@ export class TagTreeModal extends Modal {
 
     contentEl.empty();
     contentEl.addClass("cashlog-tag-tree-modal");
-    this.titleEl.setText(t("tagTree.title"));
+    this.titleEl.setText(
+      this.focusPath ? `${this.focusPath.join("/")} · ${t("tagTree.childrenTitle")}` : t("tagTree.title"),
+    );
 
     contentEl.createDiv({ cls: "cashlog-tag-tree-hint", text: t("tagTree.hint") });
 
     for (const section of this.sections) {
+      // focusPath 时只取该节点
+      let roots: TagNode[] = section.nodes;
+      if (this.focusPath) {
+        const node = findNode(section.nodes, this.focusPath);
+        roots = node?.children ?? [];
+      }
+
       const body = createSection(contentEl, {
-        title: `${section.title}（${this.countNodes(section.nodes)}）`,
+        title: `${section.title}（${this.countNodes(roots)}）`,
         cls: "cashlog-tag-tree-section",
       });
 
-      if (section.nodes.length === 0) {
+      if (roots.length === 0) {
         body.createDiv({ cls: "cashlog-tag-tree-empty", text: t("tagTree.empty") });
       }
 
-      for (const node of section.nodes) {
-        this.renderNode(body, section, node, [node.name], 0);
+      const ul = body.createEl("ul", { cls: "cashlog-tag-tree-list" });
+      for (const node of roots) {
+        this.renderNode(ul, section, node, this.focusPath ? [...this.focusPath, node.name] : [node.name]);
       }
 
-      // 该分区根级新增
+      // 该分区的新增框（focusPath 时加到该节点下，否则加到根）
       new Setting(body)
         .addText((text) => {
           text.setPlaceholder(t("tagTree.addPlaceholder"));
           text.onChange((v) => {
             this.pending[section.key] = v;
           });
+          // 回车提交，不用去点按钮
+          text.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void this.commitRootAdd(section);
+            }
+          });
         })
         .addButton((btn) => {
           btn.setButtonText(t("tagTree.addButton")).onClick(() => {
-            void (async () => {
-              const raw = (this.pending[section.key] ?? "").trim();
-              if (raw === "") return;
-              const check = validateTagSegment(raw);
-              if (!check.valid) {
-                new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-                return;
-              }
-              if (!addChild(section.nodes, [], raw)) {
-                new Notice(tp("tagTree.exists", { name: raw }));
-                return;
-              }
-              this.pending[section.key] = "";
-              await this.onChange();
-              await this.render();
-            })();
+            void this.commitRootAdd(section);
           });
         });
     }
 
-    // 恢复滚动位置（等一帧，避免被后续布局覆盖）
     window.requestAnimationFrame(() => {
       contentEl.scrollTop = scrollTop;
     });
   }
 
+  private async commitRootAdd(section: TreeSection): Promise<void> {
+    const raw = (this.pending[section.key] ?? "").trim();
+    if (raw === "") return;
+
+    const check = validateTagSegment(raw);
+    if (!check.valid) {
+      new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
+      return;
+    }
+
+    const parentPath = this.focusPath ?? [];
+    if (!addChild(section.nodes, parentPath, raw)) {
+      new Notice(tp("tagTree.exists", { name: raw }));
+      return;
+    }
+
+    this.pending[section.key] = "";
+    await this.onChange();
+    await this.render();
+  }
+
   private renderNode(
-    parent: HTMLElement,
+    parentUl: HTMLElement,
     section: TreeSection,
     node: TagNode,
     path: string[],
-    depth: number,
   ): void {
-    const row = parent.createDiv({ cls: "cashlog-tag-tree-row" });
-    row.style.paddingLeft = `${depth * 18}px`;
+    const li = parentUl.createEl("li", { cls: "cashlog-tag-tree-item" });
+
+    const row = li.createDiv({ cls: "cashlog-tag-tree-row" });
 
     const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
     nameEl.setAttribute("title", path.join("/"));
@@ -116,8 +146,7 @@ export class TagTreeModal extends Modal {
 
     // 改名
     this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
-      // 改名复用本行：这一行原本就只显示名称，替换成输入框不会"盖住"别的东西
-      this.inlineInput(row, node.name, (value) => {
+      this.inlineInput(li, node.name, (value) => {
         const trimmed = value.trim();
         if (trimmed === "" || trimmed === node.name) return;
         const check = validateTagSegment(trimmed);
@@ -130,13 +159,13 @@ export class TagTreeModal extends Modal {
       });
     });
 
-    // 加子标签：进入"新增态"，渲染时会在该节点子树末尾插入一行输入框
+    // 加子标签：进入新增态，输入行会插在这个 li 的子列表末尾
     this.iconButton(actions, "plus", t("tagTree.addChild"), () => {
       this.addingUnder = path.join("/");
       void this.render();
     });
 
-    // 删除：两次点击确认（会连带整棵子树）
+    // 删除：两次点击确认
     let armed = false;
     const delBtn = this.iconButton(actions, "x", t("tagTree.remove"), () => {
       if (!armed) {
@@ -160,17 +189,18 @@ export class TagTreeModal extends Modal {
     });
     delBtn.addClass("cashlog-tag-tree-btn-danger");
 
-    // 子节点
-    for (const child of node.children ?? []) {
-      this.renderNode(parent, section, child, [...path, child.name], depth + 1);
+    // 子节点用嵌套 <ul>
+    const children = node.children ?? [];
+    const childUl = children.length > 0 ? li.createEl("ul", { cls: "cashlog-tag-tree-list" }) : null;
+    for (const child of children) {
+      this.renderNode(childUl!, section, child, [...path, child.name]);
     }
 
-    // 新增输入行：放在该节点的子树之后，而不是替换节点本身那一行
+    // 新增输入行：放在这个 li 的最后（即子树之后），不覆盖节点本身
     if (this.addingUnder === path.join("/")) {
-      const inputRow = parent.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
-      inputRow.style.paddingLeft = `${(depth + 1) * 18}px`;
+      // 直接把输入行挂到子列表（或本 li）上，inlineInput 自己会建行
       this.inlineInput(
-        inputRow,
+        childUl ?? li,
         "",
         (value) => {
           const trimmed = value.trim();
@@ -194,7 +224,7 @@ export class TagTreeModal extends Modal {
     }
   }
 
-  // 统一的图标按钮：同一尺寸、同一套 lucide 图标
+  // 统一的图标按钮：同尺寸，lucide 图标
   private iconButton(
     parent: HTMLElement,
     icon: string,
@@ -208,15 +238,14 @@ export class TagTreeModal extends Modal {
     return btn;
   }
 
-  // 行内输入：用 Obsidian TextComponent，回车提交、Esc 取消
+  // 行内输入：Obsidian TextComponent，回车提交、Esc 取消
   private inlineInput(
-    row: HTMLElement,
+    host: HTMLElement,
     initial: string,
     onDone: (value: string) => void,
     onCancel?: () => void,
   ): void {
-    row.empty();
-    row.addClass("cashlog-tag-tree-row-editing");
+    const row = host.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
 
     const text = new TextComponent(row);
     text.setValue(initial);

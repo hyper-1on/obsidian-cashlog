@@ -490,4 +490,6 @@
   "tagTree.renamePrompt": "New name",
   "tagTree.addChildPrompt": "Add a child tag to {name}",
   "panelSettings.manageAllTags": "Manage all tags"
+,
+  "tagTree.childrenTitle": "Sub-tags"
 }
