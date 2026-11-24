@@ -2441,3 +2441,16 @@ test("[标签] 编辑余额变更条目时，附加标签编辑区必须出现",
     "余额变更条目也应有附加标签编辑区",
   );
 });
+test("[静态] 附加标签选择器：用 / 表示维度本身，无子标签时不建子菜单", () => {
+  assert.ok(SRC_DIR, "未能定位 src 目录");
+  const src = readFileSync(join(SRC_DIR, "CashlogModal.ts"), "utf8");
+
+  assert.ok(
+    src.includes('sub.setTitle("/")'),
+    "子菜单第一项应显示 /，而不是重复一遍维度名（地点 → 地点）",
+  );
+  assert.ok(
+    src.includes("if (children.length === 0)"),
+    "维度没有子标签时应直接选中它本身，不再套一层只有一项的子菜单",
+  );
+});

@@ -407,17 +407,28 @@ export class CashlogModal extends Modal {
     for (const dimension of trees) {
       menu.addItem((item) => {
         item.setTitle(dimension.name).setIcon("tag");
+        const children = dimension.children ?? [];
+
+        // 没有子标签：点维度本身就是选它，不必再套一层只有一个选项的子菜单
+        if (children.length === 0) {
+          item.onClick(() => {
+            this.addExtraTag(`#${dimension.name}`);
+          });
+          return;
+        }
+
         // obsidian.d.ts 的 MenuItem 类型未声明 setSubmenu，运行时存在，这里断言补上
         const submenu = (item as unknown as { setSubmenu: () => Menu }).setSubmenu();
 
-        // 维度本身也可选（只标 #地点，不细到食堂）
+        // "/" 表示只用维度本身（#地点），不细分到子标签。
+        // 之前这里显示维度名，和上一级菜单标题重复，看着像「地点 → 地点」。
         submenu.addItem((sub: MenuItem) => {
-          sub.setTitle(`${dimension.name}`).onClick(() => {
+          sub.setTitle("/").onClick(() => {
             this.addExtraTag(`#${dimension.name}`);
           });
         });
 
-        for (const child of dimension.children ?? []) {
+        for (const child of children) {
           submenu.addItem((sub: MenuItem) => {
             sub.setTitle(child.name).onClick(() => {
               this.addExtraTag(`#${dimension.name}/${child.name}`);
