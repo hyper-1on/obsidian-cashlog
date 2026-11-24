@@ -36,7 +36,7 @@ import { renderQueryResult } from "../src/Renderer";
 import { FakeElement, collectText } from "./stubs/dom";
 import { CashlogSettingsTab } from "../src/SettingsTab";
 import { CashlogView } from "../src/CashlogView";
-import { renderPanelSettings, openSubTagRenameModal } from "../src/PanelSettings";
+import { renderPanelSettings, openSubTagRenameModal, formatMigrationSkips } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2645,4 +2645,20 @@ test("[静态] 改名弹窗在勾选时应调用 migrateTagDetailed 并报告跳
   assert.ok(src.includes("plugin.migrateTagDetailed("), "确认时应走 migrateTagDetailed");
   assert.ok(src.includes("result.skipped"), "应处理跳过的条目");
   assert.ok(src.includes("path}:${s.line}"), "报告里应带 文件:行号");
+});
+test("[面板] 迁移跳过的条目应格式化为「文件:行号」", () => {
+  const out = formatMigrationSkips([
+    { path: "账本.md", line: 42 },
+    { path: "日记/2026.md", line: 7 },
+  ]);
+  assert.equal(out, "账本.md:42、日记/2026.md:7");
+});
+
+test("[面板] 跳过条目过多时只列前 5 条并注明总数", () => {
+  const skips = Array.from({ length: 8 }, (_, i) => ({ path: `f${i}.md`, line: i + 1 }));
+  const out = formatMigrationSkips(skips);
+
+  assert.ok(out.includes("f0.md:1"), `应包含前几条，实际: ${out}`);
+  assert.ok(!out.includes("f5.md"), `第 6 条起应省略，实际: ${out}`);
+  assert.ok(out.includes("等 8 条"), `应注明总数，实际: ${out}`);
 });

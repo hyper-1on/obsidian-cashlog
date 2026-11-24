@@ -632,6 +632,17 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
 // 重命名单个子标签的段名（不含 "/"，也不带 "#"）。
 // 右键菜单原先把「修改」接到「这个标签的子标签管理」上，和左键点击完全一样，
 // 结果永远改不到它自己的名字。
+// 把迁移跳过的条目拼成给人看的一行：path:line，最多列 limit 条。
+// 界面提示里直接给路径，用户不必再翻控制台。
+export function formatMigrationSkips(
+  skipped: Array<{ path: string; line: number }>,
+  limit = 5,
+): string {
+  const shown = skipped.slice(0, limit).map((s) => `${s.path}:${s.line}`);
+  const rest = skipped.length - shown.length;
+  return rest > 0 ? `${shown.join("、")} 等 ${skipped.length} 条` : shown.join("、");
+}
+
 export function openSubTagRenameModal(
   container: HTMLElement,
   plugin: CashlogPlugin,
@@ -664,7 +675,9 @@ export function openSubTagRenameModal(
     migrateCb.type = "checkbox";
     migrateCb.checked = true;
     checkRow.appendChild(migrateCb);
-    checkRow.appendText(t("panelSettings.renameMigrateToo"));
+    // 用 createSpan 而不是 appendText：后者是 Obsidian 的 DOM 扩展，
+    // 在某些环境下没有落到元素上，文字就成了空白（勾选框还在）。
+    checkRow.createSpan({ text: t("panelSettings.renameMigrateToo") });
     modal.appendChild(checkRow);
   }
 
@@ -699,21 +712,23 @@ export function openSubTagRenameModal(
         if (migrateCb?.checked && usageCount > 0) {
           const newFull = mainTag ? `${mainTag}/${newName}` : `#${newName}`;
           const result = await plugin.migrateTagDetailed(oldFull, newFull);
-          if (result.migrated > 0 || result.skipped.length > 0) {
+          if (result.skipped.length > 0) {
+            // 跳过项直接写进提示，带上「文件:行号」，不用再去翻控制台
             new Notice(
               tp("notice.migrationSkipped", {
                 count: result.migrated,
                 skipped: result.skipped.length,
+                detail: formatMigrationSkips(result.skipped),
               }),
             );
-          }
-          if (result.skipped.length > 0) {
-            // 明细放控制台：每条都带 文件:行号，便于逐条核对
+            // 控制台保留全量（含 reason），方便一次复制
             // eslint-disable-next-line no-console
             console.warn(
               "[cashlog] 以下条目未能迁移：",
               result.skipped.map((s) => `${s.path}:${s.line} (${s.reason})`),
             );
+          } else if (result.migrated > 0) {
+            new Notice(tp("notice.migrationDone", { count: result.migrated }));
           }
         }
 

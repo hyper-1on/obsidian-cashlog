@@ -1333,6 +1333,24 @@ input[type="time"].cashlog-field-input::-webkit-calendar-picker-indicator {
   padding: 4px 0;
 }
 
+/* 改名弹窗里「有 N 条历史记录受影响」的提示，以及「同时更新」勾选行 */
+.cashlog-tag-modal-hint {
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: var(--text-normal);
+  opacity: 0.85;
+}
+
+.cashlog-tag-modal-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
 .cashlog-tag-modal-buttons {
   display: flex;
   justify-content: flex-end;
