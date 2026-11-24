@@ -30,6 +30,32 @@ A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record i
 - **i18n** — English and Chinese UI
 - **Natural language dates** — `date today`, `date last month`, `date 14 days ago`, etc.
 
+### What this fork adds
+
+On top of the features above, this fork carries changes that upstream does not
+have. The fixed-defect list is in [PATCH.md](PATCH.md); the running development
+log is in [CHANGES.md](CHANGES.md).
+
+- **Tag tree** — tags form a tree of any depth (`expense/food/lunch`), managed
+  from a single dialog: rename in place, add a sub-tag, delete with a two-click
+  confirm
+- **Cascading tag picker** — the entry form asks one level at a time, so a
+  three-level tag takes three clicks and no typing
+- **Extra tag dimensions** — independent trees such as `place` or `necessity`,
+  written next to the main tag
+- **`group by tag <path>`** — drill into one branch, with `level N` for depth
+- **Tree-shaped tag filter** in the chart dialog, indented by depth
+- **Plain tag words in the UI** — lists, tables, tooltips and checkboxes show
+  `expense/food`; the `#` stays in the note, where Obsidian needs it
+- **Editor right-click menu and ribbon icon** — record an entry or insert a
+  chart without the command palette
+- **Order-based `column` directive** — declare columns in order instead of by
+  index, plus new `tag` and `time` columns
+- **Currency symbol override** — keep the UI language while recording in a
+  different currency
+- **Regression suite in the repo** — `npm test` runs 140 cases with no extra
+  dependencies
+
 ## Quick Start
 
 ### Record a transaction
