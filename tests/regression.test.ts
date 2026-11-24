@@ -36,7 +36,7 @@ import { renderQueryResult } from "../src/Renderer";
 import { FakeElement, collectText } from "./stubs/dom";
 import { CashlogSettingsTab } from "../src/SettingsTab";
 import { CashlogView } from "../src/CashlogView";
-import { renderPanelSettings } from "../src/PanelSettings";
+import { renderPanelSettings, openSubTagRenameModal } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2573,5 +2573,25 @@ test("[静态] 面板右键菜单应提供「重命名此标签」，而不是�
   assert.ok(
     src.includes("openSubTagRenameModal(row, node, tree, save)"),
     "右键应调用重命名弹窗，直接改这个标签自己的名字",
+  );
+});
+test("[面板] 右键重命名的弹窗必须真的挂到 DOM 上", () => {
+  const container = new FakeElement("div");
+  const node = { name: "餐饮" };
+
+  openSubTagRenameModal(
+    container as unknown as HTMLElement,
+    node,
+    [node],
+    async () => {},
+  );
+
+  // createModalOverlay 只造元素，真正挂到容器里的是 finishModal。
+  // 之前漏了那一步，弹窗只存在于内存，右键看着完全没反应。
+  const overlays = container.querySelectorAll(".cashlog-tag-modal-overlay");
+  assert.equal(overlays.length, 1, "overlay 应被挂进容器（漏了 finishModal 时这里是 0）");
+  assert.ok(
+    overlays[0].querySelector(".cashlog-tag-modal-input"),
+    "弹窗里应有输入框",
   );
 });

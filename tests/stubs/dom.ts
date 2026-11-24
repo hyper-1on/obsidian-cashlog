@@ -138,6 +138,21 @@ export class FakeElement {
     else this.removeClass(c);
   }
 
+  // 真实 DOM 的 classList：ModalHelpers 等代码会直接用它
+  get classList(): {
+    add: (...names: string[]) => void;
+    remove: (...names: string[]) => void;
+    contains: (name: string) => boolean;
+    toggle: (name: string, force?: boolean) => void;
+  } {
+    return {
+      add: (...names: string[]) => this.addClass(...names),
+      remove: (...names: string[]) => this.removeClass(...names),
+      contains: (name: string) => this.hasClass(name),
+      toggle: (name: string, force?: boolean) => this.toggleClass(name, force),
+    };
+  }
+
   createEl(tag: string, opts: { cls?: string; text?: string; attr?: Record<string, string> } = {}): FakeElement {
     const el = new FakeElement(tag);
     if (opts.cls) el.addClass(opts.cls);

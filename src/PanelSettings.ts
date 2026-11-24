@@ -632,7 +632,7 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
 // 重命名单个子标签的段名（不含 "/"，也不带 "#"）。
 // 右键菜单原先把「修改」接到「这个标签的子标签管理」上，和左键点击完全一样，
 // 结果永远改不到它自己的名字。
-function openSubTagRenameModal(
+export function openSubTagRenameModal(
   container: HTMLElement,
   node: TagNode,
   siblings: TagNode[],
@@ -679,6 +679,11 @@ function openSubTagRenameModal(
       }
     }),
   );
+
+  // 必须走 finishModal：createModalOverlay 只负责造元素，
+  // 真正把 overlay 挂进 DOM（以及聚焦输入框）的是这一步。
+  // 漏掉它，弹窗就只存在于内存里，点了右键看着像「没反应」。
+  finishModal(overlay, container, input);
 }
 
 function renderSubTagList(
