@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { MarkdownRenderChild, TFile } from "obsidian";
 import { t, tp } from "./i18n";
-import { stripCommonPrefix } from "./TagTree";
+import { parseTagText, stripCommonPrefix } from "./TagTree";
 import { round2 } from "./MoneyUtils";
 import { Query, TableColConfig, parseTableConfig, createDefaultTableConfig, withGlobalQuery, formatWeekKey } from "./Query/Query";
 import type { ChartConfig, GroupByField, SplitBy, PieValueType } from "./Query/Query";
@@ -158,10 +158,11 @@ function renderEntryRow(
         // hide tag：即使开启了 show tag in description 也不渲染标签
         if (!query.shouldHideTag && query.shouldShowTagInDescription && entry.tags.length > 0) {
           for (const tag of entry.tags) {
+            // 值（href）保持带 #，只把显示文字换成纯词条
             td.createEl("a", {
               cls: "tag",
               attr: { href: tag },
-              text: tag,
+              text: parseTagText(tag),
             });
             td.appendText(" ");
           }
@@ -247,7 +248,8 @@ function renderEntryRow(
         td.style.textAlign = col.align;
         if (entry.tags.length > 0) {
           for (const tag of entry.tags) {
-            td.createEl("a", { cls: "tag", attr: { href: tag }, text: tag });
+            // 值（href）保持带 #，只把显示文字换成纯词条
+            td.createEl("a", { cls: "tag", attr: { href: tag }, text: parseTagText(tag) });
             td.appendText(" ");
           }
         } else {

@@ -12,6 +12,15 @@ export interface TagNode {
   children?: TagNode[];
 }
 
+// 标签的显示形式：去掉 Obsidian 的 "#" 前缀。
+//
+// "#" 属于笔记的序列化格式 —— 写盘时必须带上，否则 Obsidian 不认它是标签。
+// 但它不是界面语言：用户在列表、图例、勾选项里应该只看到词条本身。
+// 所以「值」一律保持带 "#"，「呈现给用户的文字」一律经过这里。
+export function parseTagText(tag: string): string {
+  return tag.replace(/^#/, "");
+}
+
 // 单段名称校验（不含 "/"：层级由树表达）
 export function validateTagSegment(name: string): { valid: boolean; message?: string } {
   if (!name || !name.trim()) return { valid: false, message: "tag.segment.empty" };
@@ -144,8 +153,8 @@ export function tagToGroupKey(
   mainTag: string,
   level: number | undefined,
 ): string {
-  const withoutHash = fullTag.replace(/^#/, "");
-  const mainNoHash = mainTag.replace(/^#/, "");
+  const withoutHash = parseTagText(fullTag);
+  const mainNoHash = parseTagText(mainTag);
   const segs = withoutHash.split("/");
 
   // 主标签占第一段，子标签从第二段开始
@@ -165,7 +174,7 @@ export function stripCommonPrefix(keys: string[]): Map<string, string> {
 
   // 先去掉 "#"：Markdown 语法标记放在标题/图例里只是噪音
   const cleaned = new Map<string, string>();
-  for (const k of keys) cleaned.set(k, k.replace(/^#/, ""));
+  for (const k of keys) cleaned.set(k, parseTagText(k));
 
   if (keys.length === 1) {
     result.set(keys[0], cleaned.get(keys[0])!);

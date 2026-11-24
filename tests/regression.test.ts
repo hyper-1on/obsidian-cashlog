@@ -16,7 +16,7 @@ import {
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
 import { validateSubTagName } from "../src/TagValidation";
 import { createDefaultData } from "../src/CashlogModal";
-import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode } from "../src/TagTree";
+import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode, parseTagText } from "../src/TagTree";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
 import { computeIntegerPercentages, renderChartTable } from "../src/ChartRenderer";
@@ -39,6 +39,7 @@ import { CashlogView } from "../src/CashlogView";
 import { renderPanelSettings } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
+import { ChartModal } from "../src/ChartModal";
 import type { TagNode } from "../src/TagTree";
 import type { TreeSection } from "../src/TagTreeModal";
 
@@ -2147,4 +2148,75 @@ test("[对照] group by tag 一级汇总时子标签并入父标签，这与同�
   assert.equal(groups.length, 1, "一级汇总下三个条目同属「支出/餐饮」");
   assert.equal(groups[0].key, "支出/餐饮");
   assert.equal(groups[0].entries.length, 3, "三个条目都应归入该组");
+});
+
+// ===== "#" 只属于笔记格式，不属于界面语言 =====
+// 值（href / 查询 / 写盘）保持带 #；呈现给用户的文字一律走 parseTagText。
+test("[标签] parseTagText 剥掉 Obsidian 的 # 前缀", () => {
+  assert.equal(parseTagText("#支出/餐饮"), "支出/餐饮");
+  assert.equal(parseTagText("支出/餐饮"), "支出/餐饮");
+  assert.equal(parseTagText("#转账"), "转账");
+});
+
+test("[标签] tag includes 的路径带不带 # 都能匹配", () => {
+  const settings = makeSettings();
+  const plain = parse("- #支出 无子标签 💴-5 ➕2026-09-22", settings)!;
+  const parent = parse("- #支出/餐饮 父 💴-10 ➕2026-09-22", settings)!;
+  const child = parse("- #支出/餐饮/餐饮 同名子 💴-20 ➕2026-09-22", settings)!;
+
+  const cases: Array<[string, boolean, boolean, boolean]> = [
+    ["tag includes 支出", true, true, true],
+    ["tag includes #支出", true, true, true],
+    ["tag includes 餐饮", false, true, true],
+    ["tag includes #餐饮", false, true, true],
+    ["tag includes 支出/餐饮", false, true, true],
+    ["tag includes #支出/餐饮", false, true, true],
+    ["tag includes 支出/餐饮/餐饮", false, false, true],
+    ["tag includes #支出/餐饮/餐饮", false, false, true],
+  ];
+
+  for (const [q, onPlain, onParent, onChild] of cases) {
+    const res = parseFilter(q, settings);
+    assert.ok(res?.filter, `${q} 应解析出过滤器`);
+    assert.equal(res.filter(plain), onPlain, `${q} 对 #支出`);
+    assert.equal(res.filter(parent), onParent, `${q} 对 #支出/餐饮`);
+    assert.equal(res.filter(child), onChild, `${q} 对 #支出/餐饮/餐饮`);
+  }
+});
+
+test("[标签] 列表只显示纯词条，界面上不出现 #", () => {
+  const settings = makeSettings();
+  const entries = [parse("- #支出/餐饮/午餐 午饭 💴-10 ➕2026-09-22", settings)!];
+
+  const q = new Query("", settings);
+  const container = new FakeElement("div");
+  renderQueryResult(
+    container as unknown as HTMLElement,
+    q.apply(entries),
+    q,
+    fakePlugin(settings, entries),
+  );
+
+  const text = collectText(container);
+  assert.ok(text.includes("支出/餐饮/午餐"), `应显示纯词条，实际: ${text}`);
+  assert.ok(!text.includes("#"), `界面上不应出现 #，实际: ${text}`);
+});
+test("[标签] 图表弹窗的标签筛选按树渲染，且勾选项不显示 #", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐 午饭 💴-10 ➕2026-09-22", settings)!,
+    parse("- #支出/交通 地铁 💴-5 ➕2026-09-22", settings)!,
+  ];
+
+  const modal = new ChartModal({} as never, fakePlugin(settings, entries));
+  modal.open();
+
+  const content = (modal as unknown as { contentEl: FakeElement }).contentEl;
+  // 顶层一个 ul，餐饮下再套一层 → 至少两层
+  const trees = content.querySelectorAll(".cashlog-tag-filter-tree");
+  assert.ok(trees.length >= 2, `标签应按树分层渲染，实际只有 ${trees.length} 层`);
+
+  const text = collectText(content);
+  assert.ok(text.includes("午餐"), `应显示段名「午餐」，实际: ${text}`);
+  assert.ok(text.includes("餐饮"), `应显示中间层段名「餐饮」，实际: ${text}`);
 });

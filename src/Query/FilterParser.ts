@@ -6,6 +6,7 @@ import { checkPathFilterConflict } from "../PathUtils";
 import { tp } from "../i18n";
 import { DateParser } from "./DateParser";
 import { DateRange } from "./DateRange";
+import { parseTagText } from "../TagTree";
 
 // 用 OR 分割值（不区分大小写）
 function splitByOr(value: string): string[] {
@@ -18,9 +19,12 @@ function splitByOr(value: string): string[] {
 //   #支出/餐饮/午餐 ← target「餐饮」（中间层级）
 // 要求落在层级边界上，避免「餐饮」误命中「餐饮娱乐」这类不同标签。
 function tagMatches(entryTag: string, target: string): boolean {
-  const t = entryTag.toLowerCase();
-  if (t === target || t.startsWith(target + "/")) return true;
-  return t.includes("/" + target + "/") || t.endsWith("/" + target);
+  // 两边都归一化后再比较：用户写 "tag includes 支出" 或 "tag includes #支出"
+  // 都应该工作。之前只剥了条目标签的形态，导致带 # 的目标永远匹配不上。
+  const t = parseTagText(entryTag).toLowerCase();
+  const g = parseTagText(target).toLowerCase();
+  if (t === g || t.startsWith(g + "/")) return true;
+  return t.includes("/" + g + "/") || t.endsWith("/" + g);
 }
 
 // 解析一行查询文本为过滤器

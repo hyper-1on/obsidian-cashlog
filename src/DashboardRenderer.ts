@@ -8,6 +8,7 @@ import { BudgetManager, computePeriodRange } from "./BudgetManager";
 import { DateRange } from "./Query/DateRange";
 import { t, tp, formatMoney } from "./i18n";
 import { round2 } from "./MoneyUtils";
+import { parseTagText } from "./TagTree";
 
 // 仪表盘回调接口
 export interface DashboardCallbacks {
@@ -322,7 +323,7 @@ function renderRecentEntries(container: HTMLElement, entries: CashlogEntry[], hi
     const dateStr = entry.date ? entry.date.format("MM-DD") : "--";
     row.createSpan({ cls: "cashlog-recent-date", text: dateStr });
 
-    const desc = entry.description || entry.tags.join(" ");
+    const desc = entry.description || entry.tags.map(parseTagText).join(" ");
     row.createSpan({ cls: "cashlog-recent-desc", text: desc });
 
     if (entry.accountAmounts.length > 0) {
@@ -374,7 +375,7 @@ function showTooltip(anchor: HTMLElement, entry: CashlogEntry, _event: MouseEven
   if (entry.tags.length > 0) {
     const tagRow = tip.createDiv({ cls: "cashlog-tooltip-row" });
     tagRow.createSpan({ cls: "cashlog-tooltip-label", text: t("dashboard.tooltip.tags") });
-    tagRow.createSpan({ cls: "cashlog-tooltip-value", text: entry.tags.join(" ") });
+    tagRow.createSpan({ cls: "cashlog-tooltip-value", text: entry.tags.map(parseTagText).join(" ") });
   }
 
   // 描述

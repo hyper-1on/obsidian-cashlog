@@ -7,7 +7,7 @@ import { CashlogModal, EditableEntryData } from "./CashlogModal";
 import { buildEntryFromModalData } from "./EntryEditor";
 import { extractNoteName, renderAttachmentLink } from "./PathUtils";
 import { resolveEntryLine } from "./EntryLocator";
-import { stripCommonPrefix } from "./TagTree";
+import { parseTagText, stripCommonPrefix } from "./TagTree";
 import { t, tp } from "./i18n";
 import { round2 } from "./MoneyUtils";
 import { getErrorMessage } from "./ErrorUtils";
@@ -95,7 +95,7 @@ function renderEntry(
   if (!query.shouldHideTag && entry.tags.length > 0) {
     const tagSpan = li.createSpan({
       cls: "cashlog-tag",
-      text: entry.tags.join(" "),
+      text: entry.tags.map(parseTagText).join(" "),
     });
     tagSpan.insertAdjacentText("beforebegin", " ");
   }
