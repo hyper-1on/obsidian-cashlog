@@ -24,6 +24,11 @@
   - [Uploading Attachments](#uploading-attachments)
   - [Attachment Storage Format](#attachment-storage-format)
 - [Plugin Settings](#plugin-settings)
+- [Tag Management](#tag-management)
+  - [Editing the tree](#editing-the-tree)
+  - [Choosing tags while recording](#choosing-tags-while-recording)
+  - [The tag filter in the chart dialog](#the-tag-filter-in-the-chart-dialog)
+  - [About the `#`](#about-the-)
 - [Cashlog Panel](#cashlog-panel)
   - [Opening the Panel](#opening-the-panel)
   - [Dashboard](#dashboard)
@@ -574,6 +579,59 @@ Account settings are located in **Cashlog Panel → Settings → Account Setting
 
 ---
 
+## Tag Management
+
+Tags are a tree, not a flat list. A tag can have any number of sub-tags, and
+sub-tags can go as deep as you need:
+
+```text
+expense
+  food
+    lunch
+    dinner
+  transport
+```
+
+### Editing the tree
+
+Open **Panel → Settings → Manage all tags**. The dialog lists every section
+(expense, income, extra dimensions) as a tree.
+
+Each row has three buttons on the right:
+
+| Button | Action |
+|---|---|
+| pencil | Rename. The input replaces the name in place. |
+| plus | Add a sub-tag. The input appears below that tag. |
+| cross | Delete. Needs two clicks: the icon turns into a check for 3 seconds. |
+
+A name must be unique among its siblings. The same name may appear under a
+different parent, and under a different section — `expense/food` and
+`income/food` are two different tags.
+
+Clicking the same button twice closes the input it opened.
+
+### Choosing tags while recording
+
+- The **main tag** picker is a cascade: pick `food`, then `lunch`, then deeper
+  if the tree goes further. Every level comes from the tree edited above.
+- **Extra tags** are additional dimensions such as `place` or `necessity`.
+  Each is its own tree; values added there are written next to the main tag.
+
+### The tag filter in the chart dialog
+
+The filter is a tree as well, indented by depth. Ticking any node filters that
+branch, because `tag includes` already covers the sub-tags, so a parent and its
+children are independent checkboxes.
+
+### About the `#`
+
+`#` is how Obsidian marks a tag in a note, so the plugin writes it into the
+line for you. You never type it yourself:
+
+- lists, tables, tooltips and checkboxes show the plain word — `expense/food`
+- in queries both forms work: `tag includes expense` and `tag includes #expense`
+
 ## Cashlog Panel
 
 The Cashlog Panel is a standalone tab that provides a visual dashboard for your cashlog data and comprehensive settings management.
@@ -744,6 +802,13 @@ is transfer
 | `tag includes #expense/transport OR #expense/food` | Tag contains `#expense/transport` or `#expense/food` |
 | `tag does not include #expense/food` | Tag does not contain `#expense/food` |
 | `tag does not include #expense/food OR #expense/shopping` | Tag does not contain `#expense/food` and does not contain `#expense/shopping` |
+
+The leading `#` may be omitted: `tag includes expense` and `tag includes #expense`
+behave identically, and so do `tag includes food` and `tag includes #food`.
+The match is on `/` boundaries, so `food` hits `#expense/food/launch` but never
+`#expense/foodcourt`. It is not aware of the section, so `tag includes food`
+matches the `food` branch under expense, income and any extra dimension alike —
+write the full path (`tag includes #expense/food`) to pin it to one branch.
 
 Example:
 ```
@@ -935,13 +1000,28 @@ sort by account ascending
 
 | Directive | Description |
 |------|------|
-| `group by tag` | Group by tag |
+| `group by tag` | Group by tag, top level: sub-tags roll up into their parent |
+| `group by tag level N` | Group by tag, `N` levels of sub-tags deep |
+| `group by tag <path>` | Only the branch under that tag, grouped one level below the path |
+| `group by tag <path> level N` | Same branch, `N` levels below the path |
 | `group by date` | Group by date (same day = one group) |
 | `group by week` | Group by week (same year and week = one group, ISO week, Monday to Sunday) |
 | `group by month` | Group by month (same year and month = one group) |
 | `group by year` | Group by year |
 | `group by account` | Group by account |
 | `group by type` | Group by type (income/expense/transfer/balance adjustment) |
+
+`<path>` and `level` may be written in either order. A path matches the
+tag itself, anything deeper, and any sub-tag with that name in the middle of
+a longer tag, but always on a `/` boundary — `餐饮` matches `#支出/餐饮/午餐`,
+never `#支出/餐饮娱乐`. Entries outside the branch are skipped, not collected
+into an "all" group.
+
+```text
+group by tag 餐饮              # everything under 餐饮, grouped one level deeper
+group by tag 餐饮 level 2      # two levels deeper
+group by tag level 2           # two levels deep, globally
+```
 
 After grouping, each group displays its entry list and group subtotal.
 
