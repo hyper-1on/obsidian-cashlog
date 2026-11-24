@@ -2233,3 +2233,13 @@ body.theme-dark .cashlog-settings-content {
   flex: 1;
   min-width: 0;
 }
+
+/* 树形列表与下方「新增」行之间留白：输入行贴上去会和 Setting 行自带的分割线叠在一起 */
+.cashlog-tag-tree-list {
+  margin-bottom: 9px;
+}
+
+/* 行内输入框上下留一点空间，避免和相邻行的边框/分割线视觉粘连 */
+.cashlog-tag-tree-row-editing {
+  margin: 3px 0;
+}

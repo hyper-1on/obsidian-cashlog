@@ -475,7 +475,7 @@
 ,
   "panelSettings.extraTagDimensions": "Extra tag dimensions",
   "tagTree.title": "Manage tags",
-  "tagTree.hint": "✏ rename　+ add child　✕ delete (click twice)",
+  "tagTree.hint": "Three buttons per row: rename, add sub-tag, delete (delete needs two clicks)",
   "tagTree.empty": "No tags yet",
   "tagTree.addPlaceholder": "New root tag",
   "tagTree.addButton": "Add",

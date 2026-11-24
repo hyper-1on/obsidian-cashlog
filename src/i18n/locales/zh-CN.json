@@ -475,7 +475,7 @@
 ,
   "panelSettings.extraTagDimensions": "附加标签维度",
   "tagTree.title": "标签管理",
-  "tagTree.hint": "✏ 改名　+ 加子标签　✕ 删除（点两次确认）",
+  "tagTree.hint": "每行右侧三个按钮：改名、添加子标签、删除（删除需连点两次确认）",
   "tagTree.empty": "还没有标签",
   "tagTree.addPlaceholder": "新增根标签",
   "tagTree.addButton": "添加",
