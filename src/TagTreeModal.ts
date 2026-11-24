@@ -1,23 +1,27 @@
-import { App, Modal, Notice, Setting, TextComponent } from "obsidian";
+import { App, Modal, Notice, Setting, TextComponent, setIcon } from "obsidian";
 import { t, tp } from "./i18n";
-import { createSection } from "./ui/Section";
 import { addChild, pruneEmptyNodes, removeNode, validateTagSegment } from "./TagTree";
 import type { TagNode } from "./TagTree";
+import { createSection } from "./ui/Section";
 
-interface TreeSection {
+export interface TreeSection {
   key: string;
   title: string;
   nodes: TagNode[];
 }
 
-// 标签总览：一个较大的弹窗，用树形把「支出 / 收入 / 附加维度」下的所有标签
-// 一次展示出来，可在任意节点上增删改。
+// 标签总览：树形展示「支出 / 收入 / 附加维度」下的全部标签，可在任意节点增删改。
 //
-// 为什么不再用「逐层进入」的弹窗：逐层进入看不到全貌，也无法一眼看到某个标签
-// 在第几层。树形平铺 + 缩进能直接表达层级，深度不限。
+// 只有一个弹窗：此前还有逐层进入的 SubTagManagerModal，两套交互（▸ 展开 vs 缩进、
+// × vs ✕）容易让人以为功能不同。树形平铺能一次看到全貌，也就不需要"返回上一级"。
 export class TagTreeModal extends Modal {
   private readonly sections: TreeSection[];
   private readonly onChange: () => Promise<void> | void;
+
+  /** 正在给哪个路径新增子标签（null = 不在新增状态） */
+  private addingUnder: string | null = null;
+  /** 各分区根级新增框的当前输入 */
+  private pending: Record<string, string> = {};
 
   constructor(app: App, sections: TreeSection[], onChange: () => Promise<void> | void) {
     super(app);
@@ -35,56 +39,66 @@ export class TagTreeModal extends Modal {
 
   private async render(): Promise<void> {
     const { contentEl } = this;
+
+    // 重建会重置内部滚动位置，先存后还，避免新增标签后视图跳回顶部
+    const scrollTop = contentEl.scrollTop;
+
     contentEl.empty();
     contentEl.addClass("cashlog-tag-tree-modal");
     this.titleEl.setText(t("tagTree.title"));
 
-    // 顶部说明
     contentEl.createDiv({ cls: "cashlog-tag-tree-hint", text: t("tagTree.hint") });
 
     for (const section of this.sections) {
-      // 与其它弹窗共用同一套分区卡片
       const body = createSection(contentEl, {
         title: `${section.title}（${this.countNodes(section.nodes)}）`,
         cls: "cashlog-tag-tree-section",
       });
+
       if (section.nodes.length === 0) {
         body.createDiv({ cls: "cashlog-tag-tree-empty", text: t("tagTree.empty") });
       }
+
       for (const node of section.nodes) {
         this.renderNode(body, section, node, [node.name], 0);
       }
 
-      // 该分区的根级新增
-      new Setting(body).addText((text) => {
-        text.setPlaceholder(t("tagTree.addPlaceholder"));
-        text.onChange((v) => {
-          this.pending[section.key] = v;
+      // 该分区根级新增
+      new Setting(body)
+        .addText((text) => {
+          text.setPlaceholder(t("tagTree.addPlaceholder"));
+          text.onChange((v) => {
+            this.pending[section.key] = v;
+          });
+        })
+        .addButton((btn) => {
+          btn.setButtonText(t("tagTree.addButton")).onClick(() => {
+            void (async () => {
+              const raw = (this.pending[section.key] ?? "").trim();
+              if (raw === "") return;
+              const check = validateTagSegment(raw);
+              if (!check.valid) {
+                new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
+                return;
+              }
+              if (!addChild(section.nodes, [], raw)) {
+                new Notice(tp("tagTree.exists", { name: raw }));
+                return;
+              }
+              this.pending[section.key] = "";
+              await this.onChange();
+              await this.render();
+            })();
+          });
         });
-      }).addButton((btn) => {
-        btn.setButtonText(t("tagTree.addButton")).onClick(() => {
-          void (async () => {
-            const raw = (this.pending[section.key] ?? "").trim();
-            if (raw === "") return;
-            const check = validateTagSegment(raw);
-            if (!check.valid) {
-              new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-              return;
-            }
-            if (!addChild(section.nodes, [], raw)) {
-              new Notice(tp("tagTree.exists", { name: raw }));
-              return;
-            }
-            this.pending[section.key] = "";
-            await this.onChange();
-            await this.render();
-          })();
-        });
-      });
     }
+
+    // 恢复滚动位置（等一帧，避免被后续布局覆盖）
+    window.requestAnimationFrame(() => {
+      contentEl.scrollTop = scrollTop;
+    });
   }
 
-  // 递归渲染一个节点
   private renderNode(
     parent: HTMLElement,
     section: TreeSection,
@@ -93,7 +107,6 @@ export class TagTreeModal extends Modal {
     depth: number,
   ): void {
     const row = parent.createDiv({ cls: "cashlog-tag-tree-row" });
-    // 缩进表达层级，深度不限
     row.style.paddingLeft = `${depth * 18}px`;
 
     const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
@@ -101,11 +114,9 @@ export class TagTreeModal extends Modal {
 
     const actions = row.createDiv({ cls: "cashlog-tag-tree-actions" });
 
-    // 改：就地输入
-    const editBtn = actions.createSpan({ cls: "cashlog-tag-tree-btn", text: "✏" });
-    editBtn.setAttribute("aria-label", t("tagTree.rename"));
-    editBtn.addEventListener("click", () => {
-      // 内联输入：Electron 里 window.prompt 不可用
+    // 改名
+    this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
+      // 改名复用本行：这一行原本就只显示名称，替换成输入框不会"盖住"别的东西
       this.inlineInput(row, node.name, (value) => {
         const trimmed = value.trim();
         if (trimmed === "" || trimmed === node.name) return;
@@ -119,40 +130,23 @@ export class TagTreeModal extends Modal {
       });
     });
 
-    // 加子节点
-    const addBtn = actions.createSpan({ cls: "cashlog-tag-tree-btn", text: "+" });
-    addBtn.setAttribute("aria-label", t("tagTree.addChild"));
-    addBtn.addEventListener("click", () => {
-      this.inlineInput(row, "", (value) => {
-        const trimmed = value.trim();
-        if (trimmed === "") return;
-        const check = validateTagSegment(trimmed);
-        if (!check.valid) {
-          new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-          return;
-        }
-        if (!addChild(section.nodes, path, trimmed)) {
-          new Notice(tp("tagTree.exists", { name: trimmed }));
-          return;
-        }
-        void this.onChange();
-      });
+    // 加子标签：进入"新增态"，渲染时会在该节点子树末尾插入一行输入框
+    this.iconButton(actions, "plus", t("tagTree.addChild"), () => {
+      this.addingUnder = path.join("/");
+      void this.render();
     });
 
-    // 删（连带子树）
-    const delBtn = actions.createSpan({ cls: "cashlog-tag-tree-btn cashlog-tag-tree-btn-danger", text: "✕" });
-    delBtn.setAttribute("aria-label", t("tagTree.remove"));
+    // 删除：两次点击确认（会连带整棵子树）
     let armed = false;
-    delBtn.addEventListener("click", () => {
+    const delBtn = this.iconButton(actions, "x", t("tagTree.remove"), () => {
       if (!armed) {
-        // 第一次点击：进入待确认状态（3 秒后复位），避免误删整棵子树
         armed = true;
         delBtn.addClass("cashlog-tag-tree-btn-armed");
-        delBtn.setText("?");
+        setIcon(delBtn, "check");
         window.setTimeout(() => {
           armed = false;
           delBtn.classList.remove("cashlog-tag-tree-btn-armed");
-          delBtn.setText("✕");
+          setIcon(delBtn, "x");
         }, 3000);
         return;
       }
@@ -164,17 +158,63 @@ export class TagTreeModal extends Modal {
         new Notice(tp("tagTree.removed", { name: node.name }));
       })();
     });
+    delBtn.addClass("cashlog-tag-tree-btn-danger");
 
-    // 子节点递归
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        this.renderNode(parent, section, child, [...path, child.name], depth + 1);
-      }
+    // 子节点
+    for (const child of node.children ?? []) {
+      this.renderNode(parent, section, child, [...path, child.name], depth + 1);
+    }
+
+    // 新增输入行：放在该节点的子树之后，而不是替换节点本身那一行
+    if (this.addingUnder === path.join("/")) {
+      const inputRow = parent.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
+      inputRow.style.paddingLeft = `${(depth + 1) * 18}px`;
+      this.inlineInput(
+        inputRow,
+        "",
+        (value) => {
+          const trimmed = value.trim();
+          if (trimmed === "") return;
+          const check = validateTagSegment(trimmed);
+          if (!check.valid) {
+            new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
+            return;
+          }
+          if (!addChild(section.nodes, path, trimmed)) {
+            new Notice(tp("tagTree.exists", { name: trimmed }));
+            return;
+          }
+          this.addingUnder = null;
+          void this.onChange();
+        },
+        () => {
+          this.addingUnder = null;
+        },
+      );
     }
   }
 
-  // 行内输入：用 Obsidian 的 TextComponent，外观与设置页输入框一致
-  private inlineInput(row: HTMLElement, initial: string, onDone: (value: string) => void): void {
+  // 统一的图标按钮：同一尺寸、同一套 lucide 图标
+  private iconButton(
+    parent: HTMLElement,
+    icon: string,
+    label: string,
+    onClick: () => void,
+  ): HTMLElement {
+    const btn = parent.createSpan({ cls: "cashlog-tag-tree-btn" });
+    setIcon(btn, icon);
+    btn.setAttribute("aria-label", label);
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  // 行内输入：用 Obsidian TextComponent，回车提交、Esc 取消
+  private inlineInput(
+    row: HTMLElement,
+    initial: string,
+    onDone: (value: string) => void,
+    onCancel?: () => void,
+  ): void {
     row.empty();
     row.addClass("cashlog-tag-tree-row-editing");
 
@@ -189,6 +229,7 @@ export class TagTreeModal extends Modal {
       if (done) return;
       done = true;
       if (commit) onDone(text.getValue());
+      else onCancel?.();
       void this.render();
     };
 
@@ -207,6 +248,4 @@ export class TagTreeModal extends Modal {
     }
     return n;
   }
-
-  private pending: Record<string, string> = {};
 }

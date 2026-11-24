@@ -5,7 +5,6 @@ import type CashlogPlugin from "./main";
 import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { validateSubTagName, validateAccountName } from "./TagValidation";
-import { SubTagManagerModal } from "./SubTagManagerModal";
 import { TagTreeModal } from "./TagTreeModal";
 import { pruneEmptyNodes } from "./TagTree";
 import type { TagNode } from "./TagTree";
@@ -663,12 +662,12 @@ function renderSubTagList(
     const childCount = node.children?.length ?? 0;
     chip.textContent = childCount > 0 ? `${node.name} (${childCount})` : node.name;
 
-    // 左键：进入该节点的子树管理
+    // 左键与右键都走同一个树弹窗：只有一套交互，不存在「▸ 展开」和「缩进」两种表达
     chip.addEventListener("click", () => {
-      new SubTagManagerModal(plugin.app, tree, [node.name], save).open();
+      new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save).open();
     });
 
-    // 右键：打开树形总览（改名 / 加子节点 / 删除都在那里）
+    // 右键：同一入口（保留，符合桌面端习惯）
     chip.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -682,7 +681,7 @@ function renderSubTagList(
   addChip.className = "cashlog-subtag-chip cashlog-subtag-add";
   addChip.textContent = "+";
   addChip.addEventListener("click", () => {
-    new SubTagManagerModal(plugin.app, tree, [], save).open();
+    new TagTreeModal(plugin.app, [{ key: "tree", title: label, nodes: tree }], save).open();
   });
   chipContainer.appendChild(addChip);
 }

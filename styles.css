@@ -2111,7 +2111,7 @@ body.theme-dark .cashlog-settings-content {
   flex-shrink: 0;
 }
 
-/* 操作按钮：24px 点击区，图标放大到能看清 */
+/* 操作按钮：三个按钮同尺寸，靠颜色区分危险操作，不再用字号区分 */
 .cashlog-tag-tree-btn {
   display: inline-flex;
   align-items: center;
@@ -2121,8 +2121,11 @@ body.theme-dark .cashlog-settings-content {
   border-radius: 5px;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 1.15em;
-  line-height: 1;
+}
+
+.cashlog-tag-tree-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .cashlog-tag-tree-btn:hover {
@@ -2130,9 +2133,7 @@ body.theme-dark .cashlog-settings-content {
   color: var(--text-normal);
 }
 
-/* 删除按钮单独放大：它最需要被看见也最需要被避开 */
 .cashlog-tag-tree-btn-danger {
-  font-size: 1.45em;
   color: var(--text-error);
 }
 
@@ -2145,7 +2146,6 @@ body.theme-dark .cashlog-settings-content {
 .cashlog-tag-tree-btn-armed {
   background: var(--background-modifier-error);
   color: var(--text-on-accent);
-  font-weight: 700;
 }
 
 .cashlog-tag-tree-empty {
