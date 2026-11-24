@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { MarkdownRenderChild, TFile } from "obsidian";
 import { t, tp } from "./i18n";
+import { stripCommonPrefix } from "./TagTree";
 import { round2 } from "./MoneyUtils";
 import { Query, TableColConfig, parseTableConfig, createDefaultTableConfig, withGlobalQuery, formatWeekKey } from "./Query/Query";
 import type { ChartConfig, GroupByField, SplitBy, PieValueType } from "./Query/Query";
@@ -71,10 +72,13 @@ export function renderChartTable(
 
   if (!result.groups?.length) return;
 
+  // 分组标题去掉 "#" 并省略公共前缀
+  const tableDisplayKeys = stripCommonPrefix(result.groups.map((g) => g.key));
+
   for (const group of result.groups) {
     // 分组标题
     if (result.groups.length > 1) {
-      wrapper.createEl("h4", { cls: "cashlog-chart-group", text: group.key });
+      wrapper.createEl("h4", { cls: "cashlog-chart-group", text: tableDisplayKeys.get(group.key) ?? group.key });
     }
 
     // 表格
@@ -358,6 +362,8 @@ export function transformToChartData(
 
   // 收集 (标签, 显示值, 原始值) 三元组
   const slices: { label: string; display: number; raw: number }[] = [];
+  // 图表标签去掉 "#" 并省略公共前缀
+  const displayKeys = stripCommonPrefix(result.groups.map((g) => g.key));
 
   for (const group of result.groups) {
     let raw = 0;
@@ -586,10 +592,10 @@ function transformSplitChartData(
 // 格式化分组标签
 function formatGroupLabel(key: string, groupBy: GroupByField): string {
   switch (groupBy) {
-    case "tag": {
-      const parts = key.split("/");
-      return parts[parts.length - 1];
-    }
+    case "tag":
+      // 去 "#" 后原样返回；公共前缀的省略由调用方的 stripCommonPrefix 统一处理。
+      // 此前只取最后一段，"#支出/餐饮/午餐" 会退化成 "午餐"，丢失所属分类。
+      return key.replace(/^#/, "");
     case "week":
       return key;
     case "month": {

@@ -7,6 +7,7 @@ import { CashlogModal, EditableEntryData } from "./CashlogModal";
 import { buildEntryFromModalData } from "./EntryEditor";
 import { extractNoteName, renderAttachmentLink } from "./PathUtils";
 import { resolveEntryLine } from "./EntryLocator";
+import { stripCommonPrefix } from "./TagTree";
 import { t, tp } from "./i18n";
 import { round2 } from "./MoneyUtils";
 import { getErrorMessage } from "./ErrorUtils";
@@ -24,13 +25,15 @@ export function renderQueryResult(
   containerEl.empty();
   containerEl.addClass("cashlog-results");
 
+  // 分组标题去掉 "#" 并省略公共前缀（全是支出时 "支出/餐饮" → "餐饮"）
+  const displayKeys = stripCommonPrefix(result.groups.map((g) => g.key));
   for (const group of result.groups) {
     // 分组标题
     if (result.groups.length > 1) {
       const groupHeader = containerEl.createDiv({
         cls: "cashlog-group-header",
       });
-      groupHeader.createEl("strong", { text: group.key });
+      groupHeader.createEl("strong", { text: displayKeys.get(group.key) ?? group.key });
     }
 
     // 条目列表

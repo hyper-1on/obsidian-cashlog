@@ -15,6 +15,7 @@ import {
 } from "../src/CashlogSerializer";
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
 import { validateSubTagName } from "../src/TagValidation";
+import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode } from "../src/TagTree";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
 import { computeIntegerPercentages, renderChartTable } from "../src/ChartRenderer";
@@ -1609,4 +1610,145 @@ test("[静态] 使用 createSection 的文件必须 import 它（踩过的坑：
     [],
     "以下文件使用了 createSection 却没有从 ./ui/Section import：" + offenders.join(", "),
   );
+});
+
+// ------------------------------------------- 标签树（第一批：层状结构）
+
+test("[标签树] legacyToTree 把扁平数组还原成树，并保留层级", () => {
+  const tree = legacyToTree(["餐饮", "餐饮/午餐", "交通"]);
+  assert.equal(tree.length, 2, "应有两个根节点");
+  assert.equal(tree[0].name, "餐饮");
+  assert.deepEqual(tree[0].children?.map((c) => c.name), ["午餐"]);
+  assert.equal(tree[1].name, "交通");
+  assert.equal(tree[1].children, undefined, "无子节点时不应有空数组");
+});
+
+test("[标签树] legacyToTree 支持三层并去重", () => {
+  const tree = legacyToTree(["a/b/c", "a/b", "a/b/c"]);
+  assert.equal(tree.length, 1);
+  assert.equal(tree[0].children?.[0].name, "b");
+  assert.equal(tree[0].children?.[0].children?.length, 1, "重复路径应去重");
+  assert.equal(tree[0].children?.[0].children?.[0].name, "c");
+});
+
+test("[标签树] flattenTree 能还原回扁平路径", () => {
+  const flat = flattenTree(legacyToTree(["餐饮", "餐饮/午餐", "交通"]));
+  assert.deepEqual(flat, ["餐饮", "餐饮/午餐", "交通"]);
+});
+
+test("[标签树] validateTagPath 拒绝空段与空名", () => {
+  for (const bad of ["a//b", "/a", "a/", "/", "a/ /b"]) {
+    assert.equal(validateTagPath(bad).valid, false, `${bad} 应判为非法`);
+  }
+  assert.equal(validateTagPath("餐饮/午餐").valid, true);
+  assert.equal(validateTagPath("餐饮").valid, true);
+});
+
+test("[标签树] pruneEmptyNodes 清掉空名节点与空 children", () => {
+  const tree = pruneEmptyNodes([
+    { name: "a", children: [{ name: "" }, { name: "b" }] },
+    { name: "   " },
+    { name: "c", children: [] },
+  ]);
+  assert.equal(tree.length, 2, "空名节点应被清掉");
+  assert.equal(tree[0].name, "a");
+  assert.deepEqual(tree[0].children?.map((c) => c.name), ["b"]);
+  assert.equal(tree[1].name, "c");
+  assert.equal(tree[1].children, undefined, "空 children 应被删除");
+});
+
+test("[标签树] addChild / removeNode 增删任意层级", () => {
+  const tree = legacyToTree(["餐饮"]);
+  assert.equal(addChild(tree, ["餐饮"], "午餐"), true);
+  assert.equal(addChild(tree, ["餐饮"], "午餐"), false, "重复添加应返回 false");
+  assert.equal(addChild(tree, ["餐饮", "午餐"], "外卖"), true);
+  assert.deepEqual(tree[0].children?.[0].children?.map((c) => c.name), ["外卖"]);
+  assert.equal(removeNode(tree, ["餐饮", "午餐", "外卖"]), true);
+  assert.equal(tree[0].children?.[0].children, undefined, "删空后应清掉 children");
+});
+
+test("[标签树] stripCommonPrefix 同场景省略公共前缀", () => {
+  const m = stripCommonPrefix(["支出/餐饮", "支出/交通"]);
+  assert.equal(m.get("支出/餐饮"), "餐饮");
+  assert.equal(m.get("支出/交通"), "交通");
+});
+
+test("[标签树] stripCommonPrefix 更深层级省略两级前缀", () => {
+  const m = stripCommonPrefix(["支出/餐饮/早餐", "支出/餐饮/晚餐"]);
+  assert.equal(m.get("支出/餐饮/早餐"), "早餐");
+  assert.equal(m.get("支出/餐饮/晚餐"), "晚餐");
+});
+
+test("[标签树] stripCommonPrefix 混排时不省略", () => {
+  const m = stripCommonPrefix(["支出/餐饮", "收入/工资"]);
+  assert.equal(m.get("支出/餐饮"), "支出/餐饮");
+  assert.equal(m.get("收入/工资"), "收入/工资");
+});
+
+test("[对照] stripCommonPrefix 至少保留一段，不会压成空标签", () => {
+  const m = stripCommonPrefix(["支出", "支出"]);
+  assert.equal(m.get("支出"), "支出");
+});
+
+test("[标签树] tagToGroupKey 去 # 并保留主标签", () => {
+  assert.equal(tagToGroupKey("#支出/餐饮", "#支出", undefined), "支出/餐饮");
+  assert.equal(tagToGroupKey("#支出/餐饮/午餐", "#支出", 2), "支出/餐饮/午餐");
+});
+
+test("[标签树] tagToGroupKey 按 level 截断子标签深度", () => {
+  assert.equal(tagToGroupKey("#支出/餐饮/午餐", "#支出", 1), "支出/餐饮");
+  assert.equal(tagToGroupKey("#支出/餐饮/午餐/外卖", "#支出", 2), "支出/餐饮/午餐");
+  assert.equal(tagToGroupKey("#地点/学校/食堂", "#地点", 1), "地点/学校");
+});
+
+test("[标签树] 端到端：列表分组标题去 # 并省略公共前缀", () => {
+  const settings = makeSettings({ showEditButton: false, showNoteLink: false });
+  const entries = [
+    parse("- #支出/餐饮 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/交通 地铁 💴-5 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const q = new Query("group by tag", settings);
+  assert.equal(q.getError(), null);
+
+  const container = new FakeElement("div");
+  renderQueryResult(
+    container as unknown as HTMLElement,
+    q.apply(entries),
+    q,
+    fakePlugin(settings, entries),
+  );
+
+  // 只取分组标题元素：条目自身仍会显示 "#支出/餐饮" 标签，不能用整段文本断言
+  const titles: string[] = [];
+  (function walk(el: FakeElement): void {
+    if (el.cls.some((c) => c.includes("cashlog-group-header"))) titles.push(collectText(el));
+    for (const c of el.children) walk(c);
+  })(container);
+
+  const joined = titles.join(" | ");
+  assert.ok(joined.includes("餐饮"), `分组标题应为「餐饮」，实际: ${joined}`);
+  assert.ok(joined.includes("交通"), `分组标题应为「交通」，实际: ${joined}`);
+  assert.ok(!joined.includes("#"), `分组标题不应带 #，实际: ${joined}`);
+});
+
+test("[对照] 混排时列表分组标题保留完整路径", () => {
+  const settings = makeSettings({ showEditButton: false, showNoteLink: false });
+  const entries = [
+    parse("- #支出/餐饮 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #收入/工资 发薪 💴3000 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const q = new Query("group by tag", settings);
+  const container = new FakeElement("div");
+  renderQueryResult(
+    container as unknown as HTMLElement,
+    q.apply(entries),
+    q,
+    fakePlugin(settings, entries),
+  );
+
+  const text = collectText(container);
+  assert.ok(text.includes("支出/餐饮"), `混排时应保留「支出/餐饮」，实际: ${text}`);
+  assert.ok(text.includes("收入/工资"), `混排时应保留「收入/工资」，实际: ${text}`);
 });

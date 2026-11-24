@@ -1,3 +1,5 @@
+import type { TagNode } from "./TagTree";
+
 // 插件设置数据模型
 
 export interface BudgetConfig {
@@ -26,8 +28,17 @@ export interface CashlogSettings {
   expenseTag: string;
   transferTag: string;
   balanceChangeTag: string;
+  /** @deprecated 已迁移到 incomeTagTree，仅为回滚保留；新代码不要读写 */
   incomeSubTags: string[];
+  /** @deprecated 已迁移到 expenseTagTree，仅为回滚保留；新代码不要读写 */
   expenseSubTags: string[];
+
+  /** 主标签「收入」的标签树（层级不限） */
+  incomeTagTree: TagNode[];
+  /** 主标签「支出」的标签树（层级不限） */
+  expenseTagTree: TagNode[];
+  /** 副标签维度树：每棵代表一个可自由命名的维度（地点/必要性…） */
+  extraTagTrees: TagNode[];
   globalQuery: string;
   excludePaths: string[];
   includePaths: string[];
@@ -67,6 +78,16 @@ export const DEFAULT_SETTINGS: CashlogSettings = {
   balanceChangeTag: "#余额变更",
   incomeSubTags: ["工资", "理财", "兼职", "红包", "其他"],
   expenseSubTags: ["餐饮", "交通", "购物", "娱乐", "住房", "医疗", "教育", "其他"],
+
+  // 树形结构，与上面的扁平字段等价（迁移后由树生效）
+  incomeTagTree: [
+    { name: "工资" }, { name: "理财" }, { name: "兼职" }, { name: "红包" }, { name: "其他" },
+  ],
+  expenseTagTree: [
+    { name: "餐饮" }, { name: "交通" }, { name: "购物" }, { name: "娱乐" },
+    { name: "住房" }, { name: "医疗" }, { name: "教育" }, { name: "其他" },
+  ],
+  extraTagTrees: [],
   globalQuery: "",
   excludePaths: [],
   includePaths: [],

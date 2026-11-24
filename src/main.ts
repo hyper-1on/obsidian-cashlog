@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
 import { CashlogSettings, createDefaultSettings } from "./Settings";
+import { legacyToTree } from "./TagTree";
 import { CashlogSettingsTab } from "./SettingsTab";
 import { addCommands, createOrEdit } from "./Commands";
 import { ChartModal } from "./ChartModal";
@@ -171,6 +172,21 @@ export default class CashlogPlugin extends Plugin {
     // 就地修改（例如新增账户）会永久污染默认值，使「恢复默认」失效。
     this.settings = Object.assign(createDefaultSettings(), loaded ?? {});
     this.cache?.updateSettings(this.settings);
+
+    // 一次性迁移：旧的扁平子标签数组 → 标签树。
+    // 判定依据是原始数据里有没有新字段（默认值里始终有，所以不能拿 this.settings 判断）。
+    // 旧字段保留不删，万一迁移有问题可以人工回滚。
+    if (!loaded || loaded.incomeTagTree === undefined) {
+      this.settings.incomeTagTree = legacyToTree(
+        loaded?.incomeSubTags ?? this.settings.incomeSubTags,
+      );
+      this.settings.expenseTagTree = legacyToTree(
+        loaded?.expenseSubTags ?? this.settings.expenseSubTags,
+      );
+      this.settings.extraTagTrees = loaded?.extraTagTrees ?? [];
+      await this.saveSettings();
+    }
+
     // 应用货币符号设置（空表示跟随当前语言默认）
     setCurrencyOverride(this.settings.currencySymbol);
   }
