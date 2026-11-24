@@ -36,7 +36,7 @@ import { renderQueryResult } from "../src/Renderer";
 import { FakeElement, collectText } from "./stubs/dom";
 import { CashlogSettingsTab } from "../src/SettingsTab";
 import { CashlogView } from "../src/CashlogView";
-import { renderPanelSettings, openSubTagRenameModal, formatMigrationSkips } from "../src/PanelSettings";
+import { renderPanelSettings, openSubTagRenameModal, openSubTagDeleteModal, formatMigrationSkips } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
 import { ChartModal } from "../src/ChartModal";
@@ -2661,4 +2661,41 @@ test("[面板] 跳过条目过多时只列前 5 条并注明总数", () => {
   assert.ok(out.includes("f0.md:1"), `应包含前几条，实际: ${out}`);
   assert.ok(!out.includes("f5.md"), `第 6 条起应省略，实际: ${out}`);
   assert.ok(out.includes("等 8 条"), `应注明总数，实际: ${out}`);
+});
+test("[面板] 删除标签前应提示子标签数与历史记录数，并说明记录不变", () => {
+  const container = new FakeElement("div");
+  const node = {
+    name: "餐饮",
+    children: [{ name: "午餐" }, { name: "晚餐", children: [{ name: "夜宵" }] }],
+  };
+
+  const plugin = {
+    settings: makeSettings(),
+    cache: { getEntries: () => [] },
+    countTagUsages: () => 12,
+    migrateTagDetailed: async () => ({ migrated: 0, skipped: [] }),
+  };
+
+  openSubTagDeleteModal(
+    container as unknown as HTMLElement,
+    plugin as never,
+    node,
+    "#支出",
+    async () => {},
+  );
+
+  const text = collectText(container);
+  assert.ok(text.includes("3"), `应提示 3 个子标签（递归计数），实际: ${text}`);
+  assert.ok(text.includes("12"), `应提示 12 条历史记录，实际: ${text}`);
+  assert.ok(text.includes("保持不变"), `应说明历史记录的标签不变，实际: ${text}`);
+});
+
+test("[静态] 面板右键删除应走确认弹窗，而不是直接 splice", () => {
+  assert.ok(SRC_DIR, "未能定位 src 目录");
+  const src = readFileSync(join(SRC_DIR, "PanelSettings.ts"), "utf8");
+
+  assert.ok(
+    src.includes("openSubTagDeleteModal(row, plugin, node, mainTag, async () =>"),
+    "删除项应调用 openSubTagDeleteModal 做确认",
+  );
 });

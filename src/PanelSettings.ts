@@ -643,6 +643,52 @@ export function formatMigrationSkips(
   return rest > 0 ? `${shown.join("、")} 等 ${skipped.length} 条` : shown.join("、");
 }
 
+// 删除一个子标签前的确认。
+// 删除只移除预设，不动历史记录里的标签 —— 所以这里明说「记录保持不变」，
+// 并告诉用户这一支下面还有多少子标签、多少条记录，避免误删。
+export function openSubTagDeleteModal(
+  container: HTMLElement,
+  plugin: CashlogPlugin,
+  node: TagNode,
+  mainTag: string,
+  onConfirm: () => Promise<void>,
+): void {
+  const overlay = createModalOverlay(container);
+  const modal = createModalCard(overlay);
+  modal.appendChild(createModalTitle(t("panelSettings.deleteTagTitle")));
+
+  const fullPath = mainTag ? `${mainTag}/${node.name}` : `#${node.name}`;
+  const countNodes = (nodes: TagNode[]): number =>
+    nodes.reduce((sum, n) => sum + 1 + countNodes(n.children ?? []), 0);
+
+  const hint = activeDocument.createElement("div");
+  hint.className = "cashlog-tag-modal-hint";
+  hint.textContent = tp("panelSettings.deleteTagHint", {
+    name: node.name,
+    children: countNodes(node.children ?? []),
+    count: plugin.countTagUsages(fullPath),
+  });
+  modal.appendChild(hint);
+
+  const btnRow = createModalButtonRow(modal);
+  btnRow.appendChild(createModalButton(t("modal.button.cancel"), "secondary", () => overlay.remove()));
+  btnRow.appendChild(
+    createModalButton(t("panelSettings.deleteItem"), "primary", async (btn) => {
+      btn.disabled = true;
+      try {
+        await onConfirm();
+        overlay.remove();
+      } catch (e) {
+        new Notice(tp("notice.tagEditFailed", { message: getErrorMessage(e) }));
+        btn.disabled = false;
+        btn.textContent = t("panelSettings.deleteItem");
+      }
+    }),
+  );
+
+  finishModal(overlay, container, null);
+}
+
 export function openSubTagRenameModal(
   container: HTMLElement,
   plugin: CashlogPlugin,
@@ -809,12 +855,12 @@ function renderSubTagList(
           .setTitle(t("panelSettings.deleteItem"))
           .setIcon("trash")
           .onClick(() => {
-            void (async () => {
+            openSubTagDeleteModal(row, plugin, node, mainTag, async () => {
               const idx = tree.findIndex((n) => n.name === node.name);
               if (idx !== -1) tree.splice(idx, 1);
               pruneEmptyNodes(tree);
               await save();
-            })();
+            });
           });
       });
 

@@ -364,6 +364,8 @@
   "panelSettings.renameTag": "重命名此标签",
   "panelSettings.renameAffects": "有 {count} 条历史记录使用这个标签（含其子标签）。",
   "panelSettings.renameMigrateToo": "同时把这些记录里的标签也改掉",
+  "panelSettings.deleteTagTitle": "删除标签",
+  "panelSettings.deleteTagHint": "将删除「{name}」，它下面共 {children} 个子标签。有 {count} 条历史记录使用这一支；删除只移除预设，这些记录的标签保持不变。",
   "notice.migrationSkipped": "已更新 {count} 条，{skipped} 条未能定位：{detail}",
   "notice.migrationDone": "已更新 {count} 条记录",
   "panelSettings.deleteItem": "删除",

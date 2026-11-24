@@ -364,6 +364,8 @@
   "panelSettings.renameTag": "Rename this tag",
   "panelSettings.renameAffects": "{count} existing entries use this tag (including its sub-tags).",
   "panelSettings.renameMigrateToo": "Also update those entries",
+  "panelSettings.deleteTagTitle": "Delete tag",
+  "panelSettings.deleteTagHint": "This deletes \"{name}\" along with {children} sub-tags. {count} entries use this branch; only the preset is removed, their tags stay as they are.",
   "notice.migrationSkipped": "Updated {count} entries, {skipped} could not be located: {detail}",
   "notice.migrationDone": "Updated {count} entries",
   "panelSettings.deleteItem": "Delete",
