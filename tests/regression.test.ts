@@ -2516,3 +2516,32 @@ test("[标签] hide time 应移除独立的时间列", () => {
     "hide time 后独立时间列应消失",
   );
 });
+test("[旧设置] loadSettings 应把 statsMonthStartDay 钳制到 1–28", async () => {
+  const raw = new CashlogPlugin() as unknown as Record<string, unknown>;
+  raw.loadData = async () => ({ statsMonthStartDay: 31 });
+  raw.saveData = async () => {};
+  raw.cache = null;
+  raw.events = { trigger: () => {} };
+
+  await (raw as unknown as { loadSettings: () => Promise<void> }).loadSettings();
+
+  const settings = (raw as unknown as { settings: CashlogSettings }).settings;
+  assert.equal(
+    settings.statsMonthStartDay,
+    28,
+    `旧设置里的 31 应被钳制为 28，实际 ${settings.statsMonthStartDay}`,
+  );
+});
+
+test("[旧设置] loadSettings 对非法值也应回落到 1", async () => {
+  const raw = new CashlogPlugin() as unknown as Record<string, unknown>;
+  raw.loadData = async () => ({ statsMonthStartDay: 0 });
+  raw.saveData = async () => {};
+  raw.cache = null;
+  raw.events = { trigger: () => {} };
+
+  await (raw as unknown as { loadSettings: () => Promise<void> }).loadSettings();
+
+  const settings = (raw as unknown as { settings: CashlogSettings }).settings;
+  assert.equal(settings.statsMonthStartDay, 1, "0 应回落到 1");
+});

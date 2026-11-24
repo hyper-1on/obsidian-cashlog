@@ -171,6 +171,14 @@ export default class CashlogPlugin extends Plugin {
     // 用深拷贝的默认值兜底：浅拷贝会让 settings 与 DEFAULT_SETTINGS 共享数组/对象，
     // 就地修改（例如新增账户）会永久污染默认值，使「恢复默认」失效。
     this.settings = Object.assign(createDefaultSettings(), loaded ?? {});
+
+    // 旧版设置可能存着 29–31：两个设置界面现在都把 statsMonthStartDay 限制在 1–28，
+    // 但老 Vault 的 data.json 不经过界面，直接读进来会让 computeRollover 取到
+    // 错误的上一周期起点（月底加一月的回绕）。这里统一归一化。
+    this.settings.statsMonthStartDay = Math.max(
+      1,
+      Math.min(28, Number(this.settings.statsMonthStartDay) || 1),
+    );
     this.cache?.updateSettings(this.settings);
 
     // 一次性迁移：旧的扁平子标签数组 → 标签树。
