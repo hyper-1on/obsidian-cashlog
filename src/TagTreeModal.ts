@@ -22,6 +22,8 @@ export class TagTreeModal extends Modal {
 
   /** 正在给哪个路径新增子标签（null = 不在新增状态） */
   private addingUnder: string | null = null;
+  /** 正在给哪个路径改名（null = 不在改名状态） */
+  private renaming: string | null = null;
   /** 各分区根级新增框的当前输入 */
   private pending: Record<string, string> = {};
 
@@ -139,24 +141,25 @@ export class TagTreeModal extends Modal {
 
     const row = li.createDiv({ cls: "cashlog-tag-tree-row" });
 
-    const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
-    nameEl.setAttribute("title", path.join("/"));
+    // 改名时输入框占据名字本身的槽位（覆盖在原名字上），
+    // 而不是像新增那样在行下方另起一行 —— 两种操作的语义不同，视觉也应不同。
+    if (this.renaming === path.join("/")) {
+      const slot = row.createDiv({
+        cls: "cashlog-tag-tree-name-editor cashlog-tag-tree-row-editing",
+      });
+      this.renameInput(slot, node);
+    } else {
+      const nameEl = row.createSpan({ cls: "cashlog-tag-tree-name", text: node.name });
+      nameEl.setAttribute("title", path.join("/"));
+    }
 
     const actions = row.createDiv({ cls: "cashlog-tag-tree-actions" });
 
-    // 改名
+    // 改名：进入改名态，输入框会替换这一行的名字
     this.iconButton(actions, "pencil", t("tagTree.rename"), () => {
-      this.inlineInput(li, node.name, (value) => {
-        const trimmed = value.trim();
-        if (trimmed === "" || trimmed === node.name) return;
-        const check = validateTagSegment(trimmed);
-        if (!check.valid) {
-          new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
-          return;
-        }
-        node.name = trimmed;
-        void this.onChange();
-      });
+      this.renaming = path.join("/");
+      this.addingUnder = null;
+      void this.render();
     });
 
     // 加子标签：进入新增态，输入行会插在这个 li 的子列表末尾
@@ -238,7 +241,46 @@ export class TagTreeModal extends Modal {
     return btn;
   }
 
-  // 行内输入：Obsidian TextComponent，回车提交、Esc 取消
+  // 改名输入框：直接占据标签名字的槽位，预填原名并全选。
+  // 回车提交、Esc 或失焦取消；无论哪条路径都要清掉 renaming 再重建，
+  // 否则下一次 render 会继续把这一行渲染成输入框。
+  private renameInput(host: HTMLElement, node: TagNode): void {
+    const text = new TextComponent(host);
+    text.setValue(node.name);
+    text.inputEl.addClass("cashlog-tag-tree-input");
+    text.inputEl.focus();
+    text.inputEl.select();
+
+    let done = false;
+    const finish = (commit: boolean): void => {
+      if (done) return;
+      done = true;
+
+      if (commit) {
+        const trimmed = text.getValue().trim();
+        if (trimmed !== "" && trimmed !== node.name) {
+          const check = validateTagSegment(trimmed);
+          if (!check.valid) {
+            new Notice(tp("tagTree.invalid", { reason: check.message ?? "" }));
+          } else {
+            node.name = trimmed;
+            void this.onChange();
+          }
+        }
+      }
+
+      this.renaming = null;
+      void this.render();
+    };
+
+    text.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") finish(true);
+      else if (e.key === "Escape") finish(false);
+    });
+    text.inputEl.addEventListener("blur", () => finish(false));
+  }
+
+  // 新增子标签的输入行：出现在目标节点下方（没有子节点时紧随其行，有子节点时落在子列表末尾）
   private inlineInput(
     host: HTMLElement,
     initial: string,

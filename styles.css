@@ -2243,3 +2243,11 @@ body.theme-dark .cashlog-settings-content {
 .cashlog-tag-tree-row-editing {
   margin: 3px 0;
 }
+
+/* 改名时输入框占据名字本身的槽位：撑满剩余宽度，且不再需要行内上下边距 */
+.cashlog-tag-tree-name-editor {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}

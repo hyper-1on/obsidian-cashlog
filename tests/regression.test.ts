@@ -38,6 +38,8 @@ import { CashlogSettingsTab } from "../src/SettingsTab";
 import { CashlogView } from "../src/CashlogView";
 import { renderPanelSettings } from "../src/PanelSettings";
 import CashlogPlugin from "../src/main";
+import { TagTreeModal } from "../src/TagTreeModal";
+import type { TagNode } from "../src/TagTree";
 
 // Obsidian 把 activeDocument 作为全局提供（src 里直接引用，并非模块 import）。
 // 这里挂到 globalThis，使面板设置的渲染逻辑可以在 Node 下运行并断言其 DOM 结构。
@@ -1920,4 +1922,89 @@ test("[标签] 指定的路径一条都匹配不上时，结果为空而不是�
 
   const result = new Query("group by tag 餐饮", settings).apply(entries);
   assert.equal(result.groups.length, 0, "没有匹配项时不应产生任何分组");
+});
+﻿
+
+// ===== 标签树弹窗（TagTreeModal）：真实渲染 + 真实点击 =====
+// 这组用例把弹窗真正渲染出来并派发点击，能抓住「点了没反应」这类
+// 只有交互路径才暴露的缺陷；桩里 blur 会触发重建，因此也用来检查
+// 「点击目标是否在点击到达前就被销毁」。
+
+function treeContent(modal: TagTreeModal): FakeElement {
+  return modal.contentEl as unknown as FakeElement;
+}
+
+function treeRowOf(li: FakeElement): FakeElement {
+  return li.children.find((c) => c.hasClass("cashlog-tag-tree-row"))!;
+}
+
+function treeNameOf(li: FakeElement): string {
+  return (
+    treeRowOf(li)
+      .querySelectorAll("span")
+      .find((s) => s.hasClass("cashlog-tag-tree-name"))
+      ?.own.join("") ?? ""
+  );
+}
+
+function treeButton(li: FakeElement, icon: string): FakeElement {
+  const btn = treeRowOf(li)
+    .querySelectorAll("span")
+    .find((s) => s.attrs["data-icon"] === icon);
+  assert.ok(btn, `节点「${treeNameOf(li)}」应渲染 ${icon} 按钮`);
+  return btn!;
+}
+
+// 顶层标签 = 第一个 ul 的直接子 li（嵌套子标签在更深的 ul 里）
+function treeTopItems(modal: TagTreeModal): FakeElement[] {
+  const ul = treeContent(modal).querySelectorAll("ul")[0];
+  return ul.children.filter((c) => c.tag === "li");
+}
+
+function openTagTree(nodes: TagNode[]): TagTreeModal {
+  const modal = new TagTreeModal({} as never, [{ key: "expense", title: "支出", nodes }], () => {});
+  modal.open();
+  return modal;
+}
+
+function isInside(el: FakeElement, ancestor: FakeElement): boolean {
+  let cur: FakeElement | null = el;
+  while (cur) {
+    if (cur === ancestor) return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
+test("[标签树] 改名输入框应覆盖在标签名字的位置，而不是排到子标签之后", () => {
+  const modal = openTagTree([{ name: "餐饮", children: [{ name: "午餐" }] }]);
+  const canteen = treeTopItems(modal).find((li) => treeNameOf(li) === "餐饮")!;
+  treeButton(canteen, "pencil").dispatch("click", {});
+
+  const li = treeTopItems(modal)[0];
+  const editor = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing")[0];
+  assert.ok(editor, "点改名后应出现输入框");
+
+  // 「覆盖在名字之上」= 输入框就在名字那一行里。
+  // 现状是追加到 li 末尾，有子标签时会排到子列表之后，用户看到的是「底下多一行」。
+  assert.equal(
+    editor.parent,
+    treeRowOf(li),
+    "改名输入框应位于标签名字所在的行内，而不是排到子标签列表之后",
+  );
+});
+
+test("[标签树] 每个分类最后一项母标签也能添加子标签", () => {
+  const modal = openTagTree([{ name: "餐饮" }, { name: "交通" }, { name: "购物" }]);
+
+  const items = treeTopItems(modal);
+  assert.equal(treeNameOf(items[items.length - 1]), "购物", "最后一项应是购物");
+
+  treeButton(items[items.length - 1], "plus").dispatch("click", {});
+
+  const editor = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing")[0];
+  assert.ok(editor, "点最后一项的 + 应出现子标签输入框");
+
+  const top = treeTopItems(modal);
+  assert.ok(isInside(editor, top[top.length - 1]), "输入行应挂在该节点之下");
 });
