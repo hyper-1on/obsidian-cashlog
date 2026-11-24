@@ -31,16 +31,75 @@ export class TAbstractFile {}
 export class Vault {}
 export class MetadataCache {}
 export class Notice {}
+// Modal 的最小替身：open() 会触发 onOpen()，与真实行为一致，
+// 这样弹窗的渲染逻辑（TagTreeModal.render 等）能在 Node 下真正跑一遍并被断言。
 export class Modal {
-  constructor(public app?: unknown) {}
-  open(): void {}
-  close(): void {}
+  modalEl: FakeElement;
+  titleEl: FakeElement;
+  contentEl: FakeElement;
+
+  constructor(public app?: unknown) {
+    this.modalEl = new FakeElement("div");
+    this.titleEl = new FakeElement("div");
+    this.contentEl = new FakeElement("div");
+    this.modalEl.appendChild(this.titleEl);
+    this.modalEl.appendChild(this.contentEl);
+  }
+
+  open(): void {
+    this.onOpen();
+  }
+
+  close(): void {
+    this.onClose();
+  }
+
   onOpen(): void {}
   onClose(): void {}
 }
 // Obsidian 的 UI 组件类：仅在类型标注处被引用，测试中不实例化
 export class SliderComponent {}
-export class TextComponent {}
+// TextComponent：真实实现会在宿主元素里建一个 <input>，并把 inputEl 暴露出来。
+// 这里用 FakeElement 模拟，focus / blur / keydown 都能被 dispatch 复现。
+export class TextComponent {
+  inputEl: FakeElement;
+  private value = "";
+  private changeCb: ((v: string) => void) | null = null;
+
+  constructor(parent?: unknown) {
+    const host = parent as { createEl?: (t: string, o?: unknown) => FakeElement } | null;
+    this.inputEl =
+      host && typeof host.createEl === "function"
+        ? host.createEl("input", { cls: "text-component-input" })
+        : new FakeElement("input");
+  }
+
+  setValue(v: string): this {
+    this.value = String(v);
+    this.inputEl.value = this.value;
+    return this;
+  }
+
+  getValue(): string {
+    return this.value;
+  }
+
+  setPlaceholder(p: string): this {
+    this.inputEl.setAttribute("placeholder", p);
+    return this;
+  }
+
+  onChange(cb: (v: string) => void): this {
+    this.changeCb = cb;
+    return this;
+  }
+
+  // 供测试模拟输入
+  type(v: string): void {
+    this.setValue(v);
+    this.changeCb?.(this.value);
+  }
+}
 export class TextAreaComponent {}
 export class DropdownComponent {}
 export class ButtonComponent {}
@@ -57,16 +116,21 @@ export class Setting {
 
   constructor(public containerEl?: unknown) {
     this.settingEl = stubEl(containerEl, { cls: "setting-item" }) ?? containerEl ?? null;
+    // 真实 Setting 构造时就建好 name / desc 两个槽位（内容是空的），
+    // 调用方会直接对 setting.descEl.remove() 或往 nameEl 里填字。
+    // 桩里若留 null，这类「先建后删」的写法会在 Node 下炸，而真实环境不会。
+    this.nameEl = stubEl(this.settingEl, { cls: "setting-item-name" });
+    this.descEl = stubEl(this.settingEl, { cls: "setting-item-description" });
     this.controlEl = stubEl(this.settingEl, { cls: "setting-item-control" }) ?? this.settingEl;
   }
 
   setName(name: string): this {
-    this.nameEl = stubEl(this.settingEl, { cls: "setting-item-name", text: name });
+    setText(this.nameEl, name);
     return this;
   }
 
   setDesc(desc: string): this {
-    this.descEl = stubEl(this.settingEl, { cls: "setting-item-description", text: desc });
+    setText(this.descEl, desc);
     return this;
   }
 
@@ -113,6 +177,14 @@ export class Setting {
   addExtraButton(cb: unknown): this {
     return this.component(cb);
   }
+}
+
+// 往 stubEl 造出来的元素里写文本：优先用 FakeElement.setText，退化为 textContent
+function setText(el: unknown, text: string): void {
+  const e = el as { setText?: (v: string) => void; textContent?: string } | null;
+  if (!e) return;
+  if (typeof e.setText === "function") e.setText(text);
+  else e.textContent = text;
 }
 
 // 在容器上造一个元素，并补齐 Obsidian 组件常用的链式方法，
@@ -182,7 +254,12 @@ export function normalizePath(p: string): string {
   return String(p).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
 }
 
-export function setIcon(): void {}
+// setIcon：真实实现往元素里塞一个 <svg>。测试里只记录图标名，
+// 便于按 data-icon 定位「改名 / 加子标签 / 删除」这类只由图标标识的按钮。
+export function setIcon(el: unknown, icon: string): void {
+  const e = el as { setAttribute?: (k: string, v: string) => void } | null;
+  e?.setAttribute?.("data-icon", icon);
+}
 export function getIcon(): null {
   return null;
 }
