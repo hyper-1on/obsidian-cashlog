@@ -1896,3 +1896,28 @@ test("[标签] group by tag level 3 支持任意深度", () => {
   const result = new Query("group by tag level 3", settings).apply(entries);
   assert.equal(result.groups[0].key, "支出/餐饮/午餐/外卖");
 });
+
+test("[标签] group by tag <路径> 时，无该标签的记录不应落进「全部」组", () => {
+  const settings = makeSettings();
+  const entries = [
+    // 这条只有 #支出，没有餐饮
+    parse("- #支出 122112 💴-121 ➕2026-11-23", settings),
+    parse("- #支出/餐饮/午餐 午饭 💴-40 ➕2026-11-24", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag 餐饮", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+  const total = result.groups.reduce((n, g) => n + g.entries.length, 0);
+
+  assert.ok(!keys.includes("全部"), `不应出现「全部」组，实际: ${keys.join(" | ")}`);
+  assert.equal(total, 1, "只有带餐饮标签的那条应被计入");
+});
+
+test("[标签] 指定的路径一条都匹配不上时，结果为空而不是「全部」", () => {
+  const settings = makeSettings();
+  const entries = [parse("- #支出 杂项 💴-9 ➕2026-11-23", settings)]
+    .filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag 餐饮", settings).apply(entries);
+  assert.equal(result.groups.length, 0, "没有匹配项时不应产生任何分组");
+});

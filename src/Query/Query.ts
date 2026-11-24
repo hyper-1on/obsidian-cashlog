@@ -381,7 +381,10 @@ export function parseChartConfig(source: string): ChartConfig {
 
 // 生成所有分组键组合（笛卡尔积，用于多账户转账条目分发到各账户分组）
 function combineKeyOptions(options: string[][]): string[] {
-  if (options.length === 0) return [t("group.all")];
+    // 空 options 只会在「整条记录不参与本次分组」时出现（例如按路径分组但该记录
+    // 没有这个标签）。返回 ["全部"] 会把它塞进「全部」组；「没有 grouper 时
+    // 归为全部」由 group() 开头的提前返回负责。
+  if (options.length === 0) return [];
   let results: string[] = options[0];
   for (let i = 1; i < options.length; i++) {
     const next: string[] = [];
@@ -749,8 +752,11 @@ export class Query {
     for (const entry of entries) {
       // 每个 grouper 可能产生多个分组键（如账户分组时转账涉及多个账户）
       const keyOptions: string[][] = [];
+      // case 里的 break 只跳出 switch，要跳过整条记录得用标记
+      let skipEntry = false;
 
       for (const grouper of this.groupers) {
+        if (skipEntry) break;
         switch (grouper.field) {
           case "tag": {
             // 带路径：定位到某一支（可以是副标签），分组键 = 路径 + 再下一级
@@ -770,6 +776,7 @@ export class Query {
               if (!matched) {
                 // 指定了路径就只看这一支：不属于它的记录直接跳过，
                 // 否则会多出一个「无标签」分组，把无关条目混进统计。
+                skipEntry = true;
                 break;
               }
 
@@ -834,6 +841,8 @@ export class Query {
       }
 
       // 生成所有分组键组合（对多账户转账会生成多个分组）
+      if (skipEntry) continue;
+
       const combinedKeys = combineKeyOptions(keyOptions);
       for (const key of combinedKeys) {
         if (!groupMap.has(key)) {
