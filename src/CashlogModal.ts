@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { App, Modal, Notice, Setting } from "obsidian";
+import { App, Menu, MenuItem, Modal, Notice, Setting } from "obsidian";
 import { CashlogEntry } from "./CashlogEntry";
 import type { CashlogSettings } from "./Settings";
 import type CashlogPlugin from "./main";
@@ -8,6 +8,7 @@ import { AccountManager } from "./AccountManager";
 import { validateEntryData } from "./EntryEditor";
 import { t, tp, getCurrencySymbol } from "./i18n";
 import { createSection } from "./ui/Section";
+import type { TagNode } from "./TagTree";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）
@@ -226,6 +227,7 @@ export class CashlogModal extends Modal {
       }
     } else {
       this.renderSubTagField(conditionalArea);
+      this.renderExtraTagsField(conditionalArea);
       this.renderConditionalDescription(conditionalArea);
       if (this.settings.enableAccounts) {
         this.renderAccountRows(conditionalArea);
@@ -309,15 +311,140 @@ export class CashlogModal extends Modal {
   }
 
   // 渲染子标签
+  // 子标签：按标签树逐级渲染下拉。
+  // 选完一级若有子节点，就再出一级；深度不限。
+  // 每级变更都重建整个表单（与类型切换一致），这样下一级能立即出现。
   private renderSubTagField(container: HTMLElement): void {
-    new Setting(container)
-      .setName(t("cashlogModal.category"))
-      .addDropdown((dropdown) => {
-        this.populateSubTags(dropdown);
-        dropdown.onChange((value) => {
-          this.data.subTag = value;
+    const tree = this.getTagTree();
+    if (tree.length === 0) {
+      // 没有任何子标签时保留一个空下拉，避免界面突然少一行
+      new Setting(container)
+        .setName(t("cashlogModal.category"))
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", t("cashlogModal.noSubTag"));
         });
+      return;
+    }
+
+    // 当前路径（去掉空段），如 ["餐饮", "午餐"]
+    const selected = this.data.subTag.split("/").filter((s) => s !== "");
+
+    let nodes: TagNode[] = tree;
+    let path: string[] = [];
+
+    for (let depth = 0; depth <= selected.length; depth += 1) {
+      const current = selected[depth];
+      const levelPath = [...path];
+
+      new Setting(container)
+        .setName(depth === 0 ? t("cashlogModal.category") : "")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", t("cashlogModal.noSubTag"));
+          for (const node of nodes) {
+            dropdown.addOption(node.name, node.name);
+          }
+          dropdown.setValue(current ?? "");
+          dropdown.onChange((value) => {
+            this.data.subTag = [...levelPath, value].filter((s) => s !== "").join("/");
+            // 重建表单：下一级下拉会跟着出现/消失
+            this.buildForm();
+          });
+        });
+
+      const node = nodes.find((n) => n.name === current);
+      if (!node?.children?.length) break;
+      nodes = node.children;
+      path = [...path, current];
+    }
+  }
+
+  // 附加标签：chips 展示，可增删。
+  // 编辑时这些标签原样保留（见 createDefaultData 的 extraTags），
+  // 这里只负责让用户增删，不改变已有标签的语义。
+  private renderExtraTagsField(container: HTMLElement): void {
+    const trees = this.settings.extraTagTrees ?? [];
+
+    const setting = new Setting(container)
+      .setName(t("cashlogModal.extraTags"))
+      .setDesc(t("cashlogModal.extraTagsDesc"));
+
+    const chips = setting.controlEl.createDiv({ cls: "cashlog-extra-tag-chips" });
+
+    for (const tag of this.data.extraTags) {
+      const chip = chips.createSpan({
+        cls: "cashlog-extra-tag-chip",
+        text: tag.replace(/^#/, ""),
       });
+      const remove = chip.createSpan({ cls: "cashlog-extra-tag-remove", text: "×" });
+      remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.data.extraTags = this.data.extraTags.filter((x) => x !== tag);
+        this.buildForm();
+      });
+    }
+
+    const add = chips.createSpan({ cls: "cashlog-extra-tag-add", text: "+" });
+    add.addEventListener("click", (e) => {
+      this.showExtraTagPicker(e, trees);
+    });
+
+    // 没有可选的副标签维度时给一句提示，而不是留一块空白
+    if (trees.length === 0 && this.data.extraTags.length === 0) {
+      chips.createSpan({
+        cls: "cashlog-extra-tag-empty",
+        text: t("cashlogModal.noExtraTags"),
+      });
+    }
+  }
+
+  // 选附加标签：副标签树一级维度 → 二级值
+  private showExtraTagPicker(event: MouseEvent, trees: TagNode[]): void {
+    const menu = new Menu();
+
+    for (const dimension of trees) {
+      menu.addItem((item) => {
+        item.setTitle(dimension.name).setIcon("tag");
+        // obsidian.d.ts 的 MenuItem 类型未声明 setSubmenu，运行时存在，这里断言补上
+        const submenu = (item as unknown as { setSubmenu: () => Menu }).setSubmenu();
+
+        // 维度本身也可选（只标 #地点，不细到食堂）
+        submenu.addItem((sub: MenuItem) => {
+          sub.setTitle(`${dimension.name}`).onClick(() => {
+            this.addExtraTag(`#${dimension.name}`);
+          });
+        });
+
+        for (const child of dimension.children ?? []) {
+          submenu.addItem((sub: MenuItem) => {
+            sub.setTitle(child.name).onClick(() => {
+              this.addExtraTag(`#${dimension.name}/${child.name}`);
+            });
+          });
+        }
+      });
+    }
+
+    if (trees.length === 0) {
+      menu.addItem((item) => {
+        item.setTitle(t("cashlogModal.noExtraTags")).setDisabled(true);
+      });
+    }
+
+    menu.showAtMouseEvent(event);
+  }
+
+  private addExtraTag(tag: string): void {
+    if (!this.data.extraTags.includes(tag)) {
+      this.data.extraTags = [...this.data.extraTags, tag];
+    }
+    this.buildForm();
+  }
+
+  // 取当前收支类型对应的标签树
+  private getTagTree(): TagNode[] {
+    return this.data.tagType === "income"
+      ? this.settings.incomeTagTree ?? []
+      : this.settings.expenseTagTree ?? [];
   }
 
   // 渲染描述（条件字段）
