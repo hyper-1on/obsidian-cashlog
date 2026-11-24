@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, createDefaultSettings } from "./Settings";
 import type { BudgetConfig, GoalConfig } from "./Settings";
 import { validateSubTagName, validateAccountName } from "./TagValidation";
 import { TagTreeModal } from "./TagTreeModal";
-import { pruneEmptyNodes } from "./TagTree";
+import { pruneEmptyNodes, validateTagSegment } from "./TagTree";
 import type { TagNode } from "./TagTree";
 import { t, tp, formatMoney } from "./i18n";
 import { getErrorMessage } from "./ErrorUtils";
@@ -629,6 +629,58 @@ function discoverSubTagsFromCache(baseTag: string, plugin: CashlogPlugin): strin
 // 子标签 chip 列表：合并 settings 子标签 + 缓存中发现的子标签
 // 子标签列表：直接读写标签树（不再用旧的扁平数组）。
 // 左键点 chip 进入子标签管理（可继续往下钻，层级不限），"+" 添加根节点。
+// 重命名单个子标签的段名（不含 "/"，也不带 "#"）。
+// 右键菜单原先把「修改」接到「这个标签的子标签管理」上，和左键点击完全一样，
+// 结果永远改不到它自己的名字。
+function openSubTagRenameModal(
+  container: HTMLElement,
+  node: TagNode,
+  siblings: TagNode[],
+  onDone: () => Promise<void>,
+): void {
+  const overlay = createModalOverlay(container);
+  const modal = createModalCard(overlay);
+  modal.appendChild(createModalTitle(t("panelSettings.renameTag")));
+
+  const input = createModalInput(modal, t("modal.placeholder.tagName"), node.name);
+  const errorEl = createModalError(modal);
+
+  const btnRow = createModalButtonRow(modal);
+  btnRow.appendChild(createModalButton(t("modal.button.cancel"), "secondary", () => overlay.remove()));
+  btnRow.appendChild(
+    createModalButton(t("modal.button.confirm"), "primary", async (btn) => {
+      const newName = input.value.trim();
+      if (newName === "" || newName === node.name) {
+        overlay.remove();
+        return;
+      }
+
+      const check = validateTagSegment(newName);
+      if (!check.valid) {
+        errorEl.textContent = t(check.message ?? "tag.segment.invalidChars");
+        errorEl.removeClass("cashlog-hidden");
+        return;
+      }
+      if (siblings.some((n) => n !== node && n.name === newName)) {
+        errorEl.textContent = tp("tagTree.exists", { name: newName });
+        errorEl.removeClass("cashlog-hidden");
+        return;
+      }
+
+      btn.disabled = true;
+      try {
+        node.name = newName;
+        await onDone();
+        overlay.remove();
+      } catch (e) {
+        new Notice(tp("notice.tagEditFailed", { message: getErrorMessage(e) }));
+        btn.disabled = false;
+        btn.textContent = t("modal.button.confirm");
+      }
+    }),
+  );
+}
+
 function renderSubTagList(
   container: HTMLElement,
   label: string,
@@ -676,15 +728,10 @@ function renderSubTagList(
 
       menu.addItem((item) => {
         item
-          .setTitle(t("panelSettings.modifySubTag"))
+          .setTitle(t("panelSettings.renameTag"))
           .setIcon("pencil")
           .onClick(() => {
-            new TagTreeModal(
-              plugin.app,
-              [{ key: "tree", title: label, nodes: tree }],
-              save,
-              [node.name],
-            ).open();
+            openSubTagRenameModal(row, node, tree, save);
           });
       });
 

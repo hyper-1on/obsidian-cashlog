@@ -361,6 +361,7 @@
   "panelSettings.restoreDefaults": "恢复默认设置",
   "panelSettings.restoreDefaultsDesc": "将所有设置恢复为默认值",
   "panelSettings.modifySubTag": "修改子标签",
+  "panelSettings.renameTag": "重命名此标签",
   "panelSettings.deleteItem": "删除",
   "panelSettings.modifyAccount": "修改账户名",
   "panelSettings.newSubTag": "新增子标签",

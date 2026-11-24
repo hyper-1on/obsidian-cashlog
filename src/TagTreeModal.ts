@@ -92,8 +92,11 @@ export class TagTreeModal extends Modal {
       }
 
       const body = createSection(contentEl, {
-        // 分区标题通常就是主标签（"#支出"），显示时同样只留词条
-        title: `${parseTagText(section.title)}（${this.countNodes(roots)}）`,
+        // 从某个标签点进来时，整块内容都是它下面的子标签，
+        // 再写「支出子标签」这种大范围标题就名不副实了。
+        title: this.focusPath
+          ? `${this.focusPath[this.focusPath.length - 1]}（${this.countNodes(roots)}）`
+          : `${parseTagText(section.title)}（${this.countNodes(roots)}）`,
         cls: "cashlog-tag-tree-section",
       });
 

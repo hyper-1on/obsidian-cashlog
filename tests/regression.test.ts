@@ -2545,3 +2545,33 @@ test("[旧设置] loadSettings 对非法值也应回落到 1", async () => {
   const settings = (raw as unknown as { settings: CashlogSettings }).settings;
   assert.equal(settings.statsMonthStartDay, 1, "0 应回落到 1");
 });
+test("[标签树] 从某个标签点进来时，分区标题应是该标签而不是整个分类", () => {
+  const modal = new TagTreeModal(
+    {} as never,
+    [{ key: "tree", title: "支出子标签", nodes: [{ name: "餐饮", children: [{ name: "午餐" }] }] }],
+    () => {},
+    ["餐饮"],
+  );
+  modal.open();
+
+  const titles = treeContent(modal)
+    .querySelectorAll(".cashlog-section-title")
+    .map((el) => collectText(el));
+  assert.ok(titles.length > 0, "应渲染分区标题");
+  assert.ok(titles[0].startsWith("餐饮"), `标题应聚焦到「餐饮」，实际: ${titles[0]}`);
+  assert.ok(
+    !titles[0].includes("支出子标签"),
+    `不应再显示大范围标题，实际: ${titles[0]}`,
+  );
+});
+
+test("[静态] 面板右键菜单应提供「重命名此标签」，而不是重复「管理子标签」", () => {
+  assert.ok(SRC_DIR, "未能定位 src 目录");
+  const src = readFileSync(join(SRC_DIR, "PanelSettings.ts"), "utf8");
+
+  assert.ok(src.includes('t("panelSettings.renameTag")'), "右键菜单应使用「重命名此标签」文案");
+  assert.ok(
+    src.includes("openSubTagRenameModal(row, node, tree, save)"),
+    "右键应调用重命名弹窗，直接改这个标签自己的名字",
+  );
+});
