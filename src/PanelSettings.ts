@@ -713,13 +713,15 @@ export function openSubTagRenameModal(
           const newFull = mainTag ? `${mainTag}/${newName}` : `#${newName}`;
           const result = await plugin.migrateTagDetailed(oldFull, newFull);
           if (result.skipped.length > 0) {
-            // 跳过项直接写进提示，带上「文件:行号」，不用再去翻控制台
+            // 跳过项直接写进右上角提示，带上「文件:行号」，不用再去翻控制台。
+            // 8 秒：带路径的文本比普通提示长，默认时长看不完。
             new Notice(
               tp("notice.migrationSkipped", {
                 count: result.migrated,
                 skipped: result.skipped.length,
                 detail: formatMigrationSkips(result.skipped),
               }),
+              8000,
             );
             // 控制台保留全量（含 reason），方便一次复制
             // eslint-disable-next-line no-console
