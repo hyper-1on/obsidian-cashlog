@@ -199,7 +199,8 @@ export class TagTreeModal extends Modal {
       this.renaming = key;
       this.showRenameEditor(key, node, nameEl, editorSlot);
     });
-    renameBtn.addEventListener("mousedown", () => {
+    renameBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
       this.intentKey = key;
     });
 
@@ -212,7 +213,11 @@ export class TagTreeModal extends Modal {
       this.addingUnder = key;
       this.showAddEditor(addHost ?? li, section, path);
     });
-    addBtn.addEventListener("mousedown", () => {
+    addBtn.addEventListener("mousedown", (e) => {
+      // 阻止默认的焦点转移。否则输入框在 mousedown 阶段就失焦、输入行立即被移除，
+      // 少掉一行后下方按钮整体上移，mouseup 落到别的元素上，浏览器就不派发 click ——
+      // 表现是「点另一行的 + 只收起、不打开」，而且只在被移除的行位于目标上方时发生。
+      e.preventDefault();
       this.intentKey = key;
     });
 
@@ -272,12 +277,15 @@ export class TagTreeModal extends Modal {
     return btn;
   }
 
-  // 收起当前编辑态：只还原那一处 DOM，不重建整棵树
+  // 收起当前编辑态：只还原那一处 DOM，不重建整棵树。
+  // 先清状态再收 DOM：close 万一抛错，也不会把编辑状态永久卡在「已打开」，
+  // 否则之后每次点击都会在同一个位置抛异常，表现为整个对话框都用不了。
   private stopEditing(): void {
-    this.activeEditor?.close();
+    const editor = this.activeEditor;
     this.activeEditor = null;
     this.renaming = null;
     this.addingUnder = null;
+    editor?.close();
   }
 
   // 改名：输入框占据名字的槽位。取消时只把名字换回来，
@@ -293,7 +301,8 @@ export class TagTreeModal extends Modal {
 
     const close = (): void => {
       slot.addClass("is-hidden");
-      slot.empty();
+      // 幂等：槽位已空时再 empty() 会重复派发 blur、引发连锁
+      if (slot.children.length > 0) slot.empty();
       nameEl.removeClass("is-hidden");
     };
     this.activeEditor = { key, close };
@@ -354,9 +363,13 @@ export class TagTreeModal extends Modal {
     const row = parent.createDiv({ cls: "cashlog-tag-tree-row cashlog-tag-tree-row-editing" });
 
     const close = (): void => {
-      row.remove();
+      // 幂等：blur 与 click 都可能来收同一行，第二次移除会抛 NotFoundError，
+      // 那个异常会打断 click handler 里「打开新编辑器」的后半段，
+      // 表现就是「点别行的 + 只收起、不打开」，而且成功/失败会交替出现。
+      if (row.isConnected) row.remove();
     };
-    this.activeEditor = { key: this.keyOf(section, path), close };
+    const editorKey = this.keyOf(section, path);
+    this.activeEditor = { key: editorKey, close };
 
     const text = new TextComponent(row);
     text.inputEl.addClass("cashlog-tag-tree-input");
@@ -407,13 +420,19 @@ export class TagTreeModal extends Modal {
       else if (e.key === "Escape") finish(false);
     });
     text.inputEl.addEventListener("blur", () => {
-      // 失焦是本行按钮被按下造成的：交给那次 click 决定是收起还是切换。
-      // 这里抢先关掉，后面的 click 又会打开一次，「点同一个 + 想关掉」就变成关不掉。
-      if (this.intentKey !== null && this.intentKey === this.activeEditor?.key) {
+      const exempt = this.intentKey !== null && this.intentKey === this.activeEditor?.key;
+      // 失焦是本行按钮被按下造成的：交给那次 click 决定是收起还是切换
+      if (exempt) {
         this.intentKey = null; // 只豁免这一次，避免拖拽后标记残留导致再也关不掉
         return;
       }
-      finish(false);
+      // 不在 blur 里立刻收起：移除输入行会让下方整排上移，mouseup 落到别的元素上，
+      // 浏览器就不再派发 click（表现是「点别行的 + 只收起、不打开」）。
+      // 推迟到下一轮事件循环，让这次点击先完整走完。
+      window.setTimeout(() => {
+        if (this.activeEditor?.key !== editorKey) return; // 已被别的编辑器接管
+        finish(false);
+      }, 0);
     });
   }
 

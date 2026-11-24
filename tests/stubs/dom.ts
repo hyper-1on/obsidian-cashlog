@@ -33,6 +33,11 @@ export class FakeElement {
     return !this.detached;
   }
 
+  // 与真实 DOM 一致：只有仍连着父节点时才算连接在文档里
+  get isConnected(): boolean {
+    return !this.detached && this.parent !== null;
+  }
+
   // 元素被移出文档：把它和整棵子树标记为 detached
   markDetached(): void {
     this.detached = true;
@@ -41,10 +46,30 @@ export class FakeElement {
 
   // 从父节点移除自身，并让整棵子树失效（真实 DOM 里后续事件不会再到达）
   remove(): void {
-    if (this.parent) {
-      this.parent.children = this.parent.children.filter((c) => c !== this);
-      this.parent = null;
+    if (!this.parent) {
+      // 真实 Obsidian 的 remove() 内部走 parentNode.removeChild，
+      // 节点已脱离时会抛 NotFoundError —— 「同一个元素被移除两次」正是靠它暴露的。
+      throw new Error(
+        "NotFoundError: The node to be removed is no longer a child of this node",
+      );
     }
+
+    // 真实浏览器移除仍持有焦点的元素时会先派发 blur，浏览器报错信息里
+    // 「Perhaps it was moved in a 'blur' event handler?」说的就是这条连锁。
+    // 先落焦点再派发，避免回调里再次找到同一个元素而无限递归。
+    for (const focused of this.collectFocused()) {
+      focused.focused = false;
+      focused.dispatch("blur", {});
+    }
+
+    // blur 回调可能已经把整棵子树移除了
+    if (!this.parent) {
+      this.markDetached();
+      return;
+    }
+
+    this.parent.children = this.parent.children.filter((c) => c !== this);
+    this.parent = null;
     this.markDetached();
   }
 

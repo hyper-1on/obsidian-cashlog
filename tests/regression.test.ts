@@ -2229,7 +2229,7 @@ test("[标签树] 再点一次同一行的 + 应关闭输入框，而不是关�
   assert.ok(input, "第一次点击应打开输入框");
 
   // 真实浏览器的顺序：mousedown → 输入框 blur → mouseup → click
-  plus().dispatch("mousedown", {});
+  plus().dispatch("mousedown", { preventDefault() {} });
   input.dispatch("blur", {});
   plus().dispatch("click", {});
 
@@ -2248,7 +2248,7 @@ test("[标签树] 再点一次同一行的改名按钮应关闭输入框", () =>
   const input = treeContent(modal).querySelectorAll("input")[0];
   assert.ok(input, "第一次点击应打开改名输入框");
 
-  pencil().dispatch("mousedown", {});
+  pencil().dispatch("mousedown", { preventDefault() {} });
   input.dispatch("blur", {});
   pencil().dispatch("click", {});
 
@@ -2257,4 +2257,93 @@ test("[标签树] 再点一次同一行的改名按钮应关闭输入框", () =>
     0,
     "再点一次同一行的改名按钮应当关闭",
   );
+});
+test("[标签树] 完整鼠标序列：点另一行的 + 应关闭旧的并打开新的", () => {
+  const modal = openTagTree([{ name: "餐饮" }, { name: "交通" }]);
+
+  const a = treeButton(treeTopItems(modal)[0], "plus");
+  a.dispatch("mousedown", { preventDefault() {} });
+  a.dispatch("click", {});
+  const input = treeContent(modal).querySelectorAll("input")[0];
+  assert.ok(input, "餐饮的输入框应打开");
+
+  // 真实顺序：mousedown → blur → mouseup → click
+  const b = treeButton(treeTopItems(modal)[1], "plus");
+  b.dispatch("mousedown", { preventDefault() {} });
+  input.dispatch("blur", {});
+  b.dispatch("click", {});
+
+  const editors = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing");
+  assert.equal(editors.length, 1, `应只剩「交通」的输入框，实际 ${editors.length} 个`);
+  const top = treeTopItems(modal);
+  assert.ok(isInside(editors[0], top[1]), "输入框应挂在「交通」之下");
+});
+test("[标签树] 按钮的 mousedown 必须阻止默认行为，否则移除输入行会让 click 落空", () => {
+  const modal = openTagTree([{ name: "餐饮" }, { name: "交通" }]);
+
+  // 先打开一行的输入框，制造「点击另一行时会移除一个输入行」的前提
+  treeButton(treeTopItems(modal)[0], "plus").dispatch("click", {});
+
+  const target = treeButton(treeTopItems(modal)[1], "plus");
+  let prevented = false;
+  target.dispatch("mousedown", {
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+
+  assert.equal(
+    prevented,
+    true,
+    "mousedown 必须 preventDefault：否则输入框在 mousedown 阶段失焦、输入行被移除，" +
+      "布局上移会让 mouseup 落到别的元素，浏览器不再派发 click（只收起、不打开）",
+  );
+});
+test("[标签树] 真实时序：推迟的失焦清理不应误关刚打开的编辑器", () => {
+  // 桩里的 setTimeout 是同步的，这里换成「先排队、稍后手动执行」，
+  // 才能复现真实浏览器的顺序：mousedown → blur(排队) → mouseup → click → 队列执行
+  const g = globalThis as unknown as { window: { setTimeout: unknown } };
+  const realSetTimeout = g.window.setTimeout;
+  const pending: Array<() => void> = [];
+  g.window.setTimeout = (cb: () => void): number => {
+    pending.push(cb);
+    return 0;
+  };
+
+  try {
+    const modal = openTagTree([{ name: "餐饮" }, { name: "交通" }]);
+
+    const a = treeButton(treeTopItems(modal)[0], "plus");
+    a.dispatch("click", {});
+    const input = treeContent(modal).querySelectorAll("input")[0];
+    assert.ok(input, "「餐饮」的输入框应打开");
+
+    const b = treeButton(treeTopItems(modal)[1], "plus");
+    b.dispatch("mousedown", { preventDefault() {} });
+    input.dispatch("blur", {}); // 只排队，不执行
+    b.dispatch("click", {}); // click 先跑完
+
+    // 至少一个：失焦本身；可能还有第二个，来自 stopEditing 移除聚焦输入框时的连带失焦
+    assert.ok(pending.length >= 1, "失焦应把清理推迟到下一轮事件循环");
+
+    // 到这里才执行被推迟的清理
+    for (const cb of pending) cb();
+
+    const editors = treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing");
+    assert.equal(editors.length, 1, `推迟的清理把新编辑器也关掉了，实际剩 ${editors.length} 个`);
+    assert.ok(isInside(editors[0], treeTopItems(modal)[1]), "应停在「交通」之下");
+
+    // 更严格的一步：被推迟的清理若误清了编辑状态，新编辑器就再也收不起来了。
+    // 再点一次「交通」的 + 应当把它收起。
+    const b2 = treeButton(treeTopItems(modal)[1], "plus");
+    b2.dispatch("mousedown", { preventDefault() {} });
+    b2.dispatch("click", {});
+    assert.equal(
+      treeContent(modal).querySelectorAll(".cashlog-tag-tree-row-editing").length,
+      0,
+      "推迟的清理不应破坏新编辑器的状态（否则它再也收不起来）",
+    );
+  } finally {
+    g.window.setTimeout = realSetTimeout;
+  }
 });
