@@ -1,5 +1,10 @@
 # Cashlog
 
+> **Fork 声明** — 本仓库是
+> [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog) 的 fork，
+> 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护。
+> 相对上游的全部缺陷修复见 **[PATCH.md](PATCH.md)**。
+
 一款 Obsidian 个人记账插件。使用 Emoji 标记直接在 Markdown 笔记中记录收支，然后通过查询语法检索、可视化和分析数据 — 所有操作都在你的 Vault 中完成。
 
 **[English](https://github.com/hyper-1on/obsidian-cashlog/blob/main/README.md)**
