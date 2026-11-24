@@ -7,11 +7,11 @@
 
 A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record income and expenses directly in your Markdown notes with an emoji-based syntax, then query, visualize, and analyze your data — all within your vault.
 
-**[中文文档](https://github.com/uuq007/obsidian-cashlog/blob/main/README_zh.md)**
+**[中文文档](https://github.com/hyper-1on/obsidian-cashlog/blob/main/README_zh.md)**
 
-**[使用手册](https://github.com/uuq007/obsidian-cashlog/blob/main/使用手册.md)**
+**[使用手册](https://github.com/hyper-1on/obsidian-cashlog/blob/main/使用手册.md)**
 
-**[USAGE](https://github.com/uuq007/obsidian-cashlog/blob/main/USAGE.md)**
+**[USAGE](https://github.com/hyper-1on/obsidian-cashlog/blob/main/USAGE.md)**
 
 
 
@@ -228,14 +228,14 @@ Use `` ```cashlog-chart `` code blocks to render visualizations powered by Chart
 
 ### Manual
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/uuq007/obsidian-cashlog/releases)
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/hyper-1on/obsidian-cashlog/releases)
 2. Copy them to `.obsidian/plugins/obsidian-cashlog/` in your vault
 3. Enable the plugin in Obsidian Settings → Community Plugins
 
 ### Build from source
 
 ```bash
-git clone https://github.com/uuq007/obsidian-cashlog.git
+git clone https://github.com/hyper-1on/obsidian-cashlog.git
 cd obsidian-cashlog
 npm install
 npm run build

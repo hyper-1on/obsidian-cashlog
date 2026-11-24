@@ -1,15 +1,15 @@
 # Cashlog
 
-> **Fork 声明** —— 本仓库是
+> **Fork 声明** — 本仓库是
 > [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog) 的 fork，
 > 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护。
 > 相对上游的全部缺陷修复见 **[PATCH.md](PATCH.md)**。
 
 一款 Obsidian 个人记账插件。使用 Emoji 标记直接在 Markdown 笔记中记录收支，然后通过查询语法检索、可视化和分析数据 — 所有操作都在你的 Vault 中完成。
 
-**[English](https://github.com/uuq007/obsidian-cashlog/blob/main/README.md)**
+**[English](https://github.com/hyper-1on/obsidian-cashlog/blob/main/README.md)**
 
-**[使用手册](https://github.com/uuq007/obsidian-cashlog/blob/main/使用手册.md)**
+**[使用手册](https://github.com/hyper-1on/obsidian-cashlog/blob/main/使用手册.md)**
 
 ---
 
@@ -224,14 +224,14 @@ date 2026-01-01 2026-03-31   # 绝对范围
 
 ### 手动安装
 
-1. 从 [最新发布](https://github.com/uuq007/obsidian-cashlog/releases) 下载 `main.js`、`manifest.json` 和 `styles.css`
+1. 从 [最新发布](https://github.com/hyper-1on/obsidian-cashlog/releases) 下载 `main.js`、`manifest.json` 和 `styles.css`
 2. 复制到你的 Vault 的 `.obsidian/plugins/obsidian-cashlog/` 目录
 3. 在 Obsidian 设置 → 第三方插件中启用
 
 ### 从源码构建
 
 ```bash
-git clone https://github.com/uuq007/obsidian-cashlog.git
+git clone https://github.com/hyper-1on/obsidian-cashlog.git
 cd obsidian-cashlog
 npm install
 npm run build
