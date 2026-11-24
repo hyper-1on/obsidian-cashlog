@@ -2266,3 +2266,25 @@ body.theme-dark .cashlog-settings-content {
   margin-top: 8vh;
   max-height: 84vh;
 }
+
+/* 图表弹窗的标签筛选：标签是树形的，平铺勾选框看不出层级也分不清同名分支。
+   这里按树缩进渲染，阅读方式与「管理所有标签」保持一致。 */
+.cashlog-tag-filter-tree {
+  list-style: disc;
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+
+.cashlog-tag-filter-item {
+  margin: 0;
+}
+
+.cashlog-tag-filter-item::marker {
+  color: var(--text-faint);
+}
+
+/* 嵌套层之间留一点气，否则上下两层的勾选框会挤在一起 */
+.cashlog-tag-filter-item > .cashlog-tag-filter-tree {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}

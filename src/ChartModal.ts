@@ -5,6 +5,8 @@ import type { CashlogEntry } from "./CashlogEntry";
 import { MAX_TABLE_COLS, type TableColConfig } from "./Query/Query";
 import { t, tp } from "./i18n";
 import { createSection } from "./ui/Section";
+import { legacyToTree, parseTagText } from "./TagTree";
+import type { TagNode } from "./TagTree";
 
 // 图表类型
 type ChartType = "table" | "bar" | "line" | "pie";
@@ -179,26 +181,11 @@ export class ChartModal extends Modal {
           .setName(t("chartModal.tagFilter"))
           .setDesc(t("chartModal.tagFilterDesc"));
 
-        const tagContainer = tagSection.createDiv({
-          cls: "cashlog-checkbox-list",
-        });
-        for (const tag of allTags) {
-          const label = tagContainer.createEl("label", {
-            cls: "cashlog-checkbox-label",
-          });
-          const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
-          checkbox.checked = this.tagFilters.includes(tag);
-          checkbox.addEventListener("change", () => {
-            if (checkbox.checked) {
-              if (!this.tagFilters.includes(tag)) {
-                this.tagFilters.push(tag);
-              }
-            } else {
-              this.tagFilters = this.tagFilters.filter((t) => t !== tag);
-            }
-          });
-          label.createSpan({ text: tag });
-        }
+        // 标签本身是树形的（#支出/餐饮/午餐），平铺成一串勾选框既看不出层级，
+        // 也无法区分不同分支下的同名标签。这里按树渲染，逐层缩进。
+        const tree = legacyToTree(allTags.map(parseTagText));
+        const list = tagSection.createEl("ul", { cls: "cashlog-tag-filter-tree" });
+        this.renderTagFilterNodes(list, tree, []);
       } else {
         new Setting(tagSection)
           .setName(t("chartModal.tagFilter"))
@@ -410,6 +397,38 @@ export class ChartModal extends Modal {
       }
     }
     return Array.from(tagSet).sort();
+  }
+
+  // 树形勾选：每个节点独立可勾，不做父子联动。
+  // 勾父节点本身就等于「筛这一支」（tag includes 已包含子树），
+  // 若再联动勾子，反而表达不出「只要父、不要子」。
+  // 存进 tagFilters 的是带 # 的完整路径（值要能直接拼进查询），
+  // 界面上只显示这一层的段名。
+  private renderTagFilterNodes(parent: HTMLElement, nodes: TagNode[], prefix: string[]): void {
+    for (const node of nodes) {
+      const path = [...prefix, node.name];
+      const full = "#" + path.join("/");
+
+      const li = parent.createEl("li", { cls: "cashlog-tag-filter-item" });
+      const label = li.createEl("label", { cls: "cashlog-checkbox-label" });
+      const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
+      checkbox.checked = this.tagFilters.includes(full);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          if (!this.tagFilters.includes(full)) {
+            this.tagFilters.push(full);
+          }
+        } else {
+          this.tagFilters = this.tagFilters.filter((t) => t !== full);
+        }
+      });
+      label.createSpan({ text: node.name });
+
+      if (node.children && node.children.length > 0) {
+        const childList = li.createEl("ul", { cls: "cashlog-tag-filter-tree" });
+        this.renderTagFilterNodes(childList, node.children, path);
+      }
+    }
   }
 
   // 判断条目是否匹配当前类型筛选
