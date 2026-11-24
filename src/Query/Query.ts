@@ -4,6 +4,7 @@ import { FilterFunction, Sorter, Grouper, QueryResult, EntryGroup, Summary } fro
 import { parseFilter } from "./FilterParser";
 import type { CashlogSettings } from "../Settings";
 import { round2 } from "../MoneyUtils";
+import { tagToGroupKey } from "../TagTree";
 import { t, tp } from "../i18n";
 
 // 表格列配置
@@ -482,15 +483,42 @@ export class Query {
       return;
     }
 
-    // group by（tag 可带 level：默认按一级子标签汇总，level 2 保留完整标签）
+    // group by <字段> [<路径>] [level N]
+    //   group by tag                  全局按一级子标签
+    //   group by tag level 2          全局按二级
+    //   group by tag 餐饮              定位到「餐饮」，按下一级
+    //   group by tag 餐饮 level 2      定位到「餐饮」，再往下 2 级
+    //   group by tag 地点/学校         定位到副标签「地点/学校」
     const groupMatch = line.match(
-      /^group\s+by\s+(tag|date|week|month|year|account|type)(?:\s+level\s+([12]))?/i,
+      /^group\s+by\s+(tag|date|week|month|year|account|type)\b(.*)$/i,
     );
     if (groupMatch) {
-      this.groupers.push({
-        field: groupMatch[1].toLowerCase(),
-        level: groupMatch[2] ? Number(groupMatch[2]) : undefined,
-      });
+      const field = groupMatch[1].toLowerCase();
+      const rest = groupMatch[2].trim();
+
+      let level: number | undefined;
+      let tagPath: string[] | undefined;
+
+      if (rest !== "") {
+        const levelOnly = rest.match(/^level\s+(\d+)$/i);
+        const pathLevel = rest.match(/^(\S+)\s+level\s+(\d+)$/i);
+        const levelPath = rest.match(/^level\s+(\d+)\s+(\S+)$/i);
+        const pathOnly = rest.match(/^(\S+)$/);
+
+        if (levelOnly) {
+          level = Number(levelOnly[1]);
+        } else if (pathLevel) {
+          tagPath = pathLevel[1].split("/").filter(Boolean);
+          level = Number(pathLevel[2]);
+        } else if (levelPath) {
+          level = Number(levelPath[1]);
+          tagPath = levelPath[2].split("/").filter(Boolean);
+        } else if (pathOnly) {
+          tagPath = pathOnly[1].split("/").filter(Boolean);
+        }
+      }
+
+      this.groupers.push({ field, level, tagPath });
       return;
     }
 
@@ -725,15 +753,44 @@ export class Query {
       for (const grouper of this.groupers) {
         switch (grouper.field) {
           case "tag": {
+            // 带路径：定位到某一支（可以是副标签），分组键 = 路径 + 再下一级
+            if (grouper.tagPath && grouper.tagPath.length > 0) {
+              const wanted = grouper.tagPath.join("/").toLowerCase();
+              const matched = entry.tags.find((tag) => {
+                const lower = tag.replace(/^#/, "").toLowerCase();
+                // 同 tagMatches：允许开头、中间层级、结尾三种位置
+                return (
+                  lower === wanted ||
+                  lower.startsWith(wanted + "/") ||
+                  lower.includes("/" + wanted + "/") ||
+                  lower.endsWith("/" + wanted)
+                );
+              });
+
+              if (!matched) {
+                keyOptions.push([t("group.noTag")]);
+                break;
+              }
+
+              const segs = matched.replace(/^#/, "").split("/");
+              // 主标签占 1 段 + 路径占 N 段 + 再往下 level 段（默认 1 段）
+              const depth = grouper.level
+                ? grouper.tagPath.length + 1 + grouper.level
+                : grouper.tagPath.length + 2;
+              keyOptions.push([segs.slice(0, depth).join("/")]);
+              break;
+            }
+
+            // 不带路径：按主标签（全局）
             const fullTag = entry.primaryTag;
             if (!fullTag) {
               keyOptions.push([t("group.noTag")]);
               break;
             }
-            // 默认折叠到一级（#支出/餐饮/午餐 → #支出/餐饮），
-            // 二级是细分，汇总时看一级更符合直觉，也不会把图表切碎。
+
             const level = grouper.level ?? 1;
-            keyOptions.push([level >= 2 ? fullTag : topLevelTag(fullTag)]);
+            const mainTag = "#" + fullTag.replace(/^#/, "").split("/")[0];
+            keyOptions.push([tagToGroupKey(fullTag, mainTag, level)]);
             break;
           }
           case "date":

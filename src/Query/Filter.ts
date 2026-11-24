@@ -17,8 +17,11 @@ export interface Sorter {
 // 分组器
 export interface Grouper {
   field: string;
-  // 仅对 tag 分组生效：1（默认）= 按一级子标签汇总，2 = 保留完整标签
+  // 仅对 tag 分组生效：子标签深度（1 = 一级，不填同 1）
   level?: number;
+  // 仅对 tag 分组生效：定位到某一支（如 ["地点", "学校"]）。
+  // 给定时会从条目的「全部标签」里找匹配项，而不只是主标签。
+  tagPath?: string[];
 }
 
 // 查询结果

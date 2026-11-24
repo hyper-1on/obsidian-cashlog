@@ -1541,9 +1541,9 @@ test("[二级] group by tag 默认按一级汇总，二级不单独成组", () =
   const result = new Query("group by tag", settings).apply(entries);
   const keys = result.groups.map((g) => g.key);
 
-  assert.ok(keys.includes("#支出/餐饮"), `应出现一级分组，实际: ${keys.join(" | ")}`);
-  assert.ok(!keys.includes("#支出/餐饮/午餐"), "二级不应单独成组");
-  assert.ok(!keys.includes("#支出/餐饮/晚餐"), "二级不应单独成组");
+  assert.ok(keys.includes("支出/餐饮"), `应出现一级分组，实际: ${keys.join(" | ")}`);
+  assert.ok(!keys.includes("支出/餐饮/午餐"), "二级不应单独成组");
+  assert.ok(!keys.includes("支出/餐饮/晚餐"), "二级不应单独成组");
 });
 
 test("[二级] group by tag level 2 保留完整标签", () => {
@@ -1556,8 +1556,8 @@ test("[二级] group by tag level 2 保留完整标签", () => {
   const result = new Query("group by tag level 2", settings).apply(entries);
   const keys = result.groups.map((g) => g.key);
 
-  assert.ok(keys.includes("#支出/餐饮/午餐"), `level 2 应保留完整标签，实际: ${keys.join(" | ")}`);
-  assert.ok(keys.includes("#支出/餐饮/晚餐"));
+  assert.ok(keys.includes("支出/餐饮/午餐"), `level 2 应保留完整标签，实际: ${keys.join(" | ")}`);
+  assert.ok(keys.includes("支出/餐饮/晚餐"));
 });
 
 test("[对照] group by tag 对无子标签的条目保持原样", () => {
@@ -1565,7 +1565,7 @@ test("[对照] group by tag 对无子标签的条目保持原样", () => {
   const entries = [parse("- #支出 杂项 💴-9 ➕2026-04-25", settings)]
     .filter((e): e is CashlogEntry => e !== null);
   const result = new Query("group by tag", settings).apply(entries);
-  assert.equal(result.groups[0].key, "#支出", "一级标签不应被改写");
+  assert.equal(result.groups[0].key, "支出", "一级标签不应被改写（去掉 # 后）");
 });
 
 test("[二级] tag includes 用一级名能命中二级条目", () => {
@@ -1825,4 +1825,74 @@ test("[标签] 转账条目的附加标签也应保留", () => {
   const entry = parse("- #转账 #地点/银行 💳微信💴-100 💳支付宝💴100 ➕2026-04-25", settings)!;
   const data = createDefaultData(settings, entry);
   assert.deepEqual(data.extraTags, ["#地点/银行"], "转账的副标签应被保留");
+});
+
+// ------------------------------------------- group by tag <路径>
+
+test("[标签] group by tag 餐饮：只统计餐饮子树，按下一级分组", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/餐饮/晚餐 晚饭 💴-50 ➕2026-04-25", settings),
+    parse("- #支出/交通/地铁 通勤 💴-5 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag 餐饮", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+
+  assert.ok(keys.includes("支出/餐饮/午餐"), `应包含午餐组，实际: ${keys.join(" | ")}`);
+  assert.ok(keys.includes("支出/餐饮/晚餐"), "应包含晚餐组");
+  assert.ok(!keys.some((k) => k.includes("交通")), "交通支不应出现（已被路径收窄）");
+});
+
+test("[标签] group by tag 地点/学校：能按副标签分组", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮 午饭 #地点/学校/食堂 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/餐饮 晚饭 #地点/学校/超市 💴-20 ➕2026-04-25", settings),
+    parse("- #支出/餐饮 家里吃 #地点/家 💴-10 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag 地点/学校", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+
+  assert.ok(keys.includes("地点/学校/食堂"), `应包含食堂组，实际: ${keys.join(" | ")}`);
+  assert.ok(keys.includes("地点/学校/超市"), "应包含超市组");
+  assert.ok(!keys.some((k) => k.includes("家")), "非学校地点不应出现");
+});
+
+test("[标签] group by tag 餐饮 level 2：下钻两级", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐/外卖 外卖 💴-30 ➕2026-04-25", settings),
+    parse("- #支出/餐饮/午餐/食堂 食堂 💴-15 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag 餐饮 level 2", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+
+  assert.ok(keys.includes("支出/餐饮/午餐/外卖"), `应到第三层，实际: ${keys.join(" | ")}`);
+  assert.ok(keys.includes("支出/餐饮/午餐/食堂"));
+});
+
+test("[对照] group by tag 不带路径时仍是全局一级", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐 午饭 💴-35 ➕2026-04-25", settings),
+    parse("- #支出/交通/地铁 通勤 💴-5 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag", settings).apply(entries);
+  const keys = result.groups.map((g) => g.key);
+  assert.deepEqual(keys.sort(), ["支出/交通", "支出/餐饮"], "全局一级（去 #，按 sort 顺序）");
+});
+
+test("[标签] group by tag level 3 支持任意深度", () => {
+  const settings = makeSettings();
+  const entries = [
+    parse("- #支出/餐饮/午餐/外卖/工作日 外卖 💴-30 ➕2026-04-25", settings),
+  ].filter((e): e is CashlogEntry => e !== null);
+
+  const result = new Query("group by tag level 3", settings).apply(entries);
+  assert.equal(result.groups[0].key, "支出/餐饮/午餐/外卖");
 });
