@@ -134,12 +134,15 @@ export function buildEntryFromModalData(
 
   const amount = round2(noAccountAmt + accountAmounts.reduce((s, aa) => s + aa.amount, 0));
 
+  // 主标签 + 附加标签：副标签原样写回，否则编辑一次就会丢失 #地点/食堂 这类标签
+  const allTags = [fullTag, ...data.extraTags];
+
   return new CashlogEntry(
     data.description,
     amount,
     validDate,
     data.time || null,
-    [fullTag],
+    allTags,
     context.indentation,
     context.listMarker,
     context.location,

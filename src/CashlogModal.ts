@@ -20,6 +20,8 @@ export interface AccountAmountItem {
 export interface EditableEntryData {
   tagType: "income" | "expense" | "transfer" | "balanceChange";
   subTag: string;
+  /** 附加标签（副标签），如 #地点/食堂。编辑时必须原样保留，否则会丢数据 */
+  extraTags: string[];
   description: string;
   date: string;
   time: string;
@@ -33,8 +35,26 @@ export interface EditableEntryData {
   attachments: string[];
 }
 
+// 提取附加标签：不属于任何主标签（收入/支出/转账/余额变更）的标签都算副标签。
+// 编辑时这些标签必须原样保留，否则用户手写的 #地点/食堂 会在保存后消失。
+function extractExtraTags(entry: CashlogEntry, settings: CashlogSettings): string[] {
+  const mainTags = [
+    settings.incomeTag,
+    settings.expenseTag,
+    settings.transferTag,
+    settings.balanceChangeTag,
+  ]
+    .filter(Boolean)
+    .map((tag) => tag.toLowerCase());
+
+  return entry.tags.filter((tag) => {
+    const lower = tag.toLowerCase();
+    return !mainTags.some((main) => lower === main || lower.startsWith(main + "/"));
+  });
+}
+
 // 从 CashlogEntry 创建默认 EditableEntryData
-function createDefaultData(settings: CashlogSettings, entry: CashlogEntry | null): EditableEntryData {
+export function createDefaultData(settings: CashlogSettings, entry: CashlogEntry | null): EditableEntryData {
   const base = {
     description: entry?.description || "",
     date: entry?.date ? entry.date.format("YYYY-MM-DD") : moment().format("YYYY-MM-DD"),
@@ -44,6 +64,8 @@ function createDefaultData(settings: CashlogSettings, entry: CashlogEntry | null
     toAccounts: [] as AccountAmountItem[],
     balanceChangeAccounts: [] as AccountAmountItem[],
     attachments: entry?.attachments ? [...entry.attachments] : [],
+    // 附加标签：除主标签外的全部标签，编辑时必须原样保留
+    extraTags: entry ? extractExtraTags(entry, settings) : [],
   };
 
   if (!entry || entry.tags.length === 0) {

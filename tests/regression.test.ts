@@ -15,6 +15,7 @@ import {
 } from "../src/CashlogSerializer";
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
 import { validateSubTagName } from "../src/TagValidation";
+import { createDefaultData } from "../src/CashlogModal";
 import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode } from "../src/TagTree";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
@@ -1751,4 +1752,77 @@ test("[对照] 混排时列表分组标题保留完整路径", () => {
   const text = collectText(container);
   assert.ok(text.includes("支出/餐饮"), `混排时应保留「支出/餐饮」，实际: ${text}`);
   assert.ok(text.includes("收入/工资"), `混排时应保留「收入/工资」，实际: ${text}`);
+});
+
+// ------------------------------------------- 多标签：编辑不丢数据（第一批核心）
+
+test("[标签] 编辑多标签条目时，附加标签必须原样保留", () => {
+  const settings = makeSettings();
+  const line = "- #支出/餐饮 午饭 #地点/食堂 #必要性/必要 💴-35 ➕2026-04-25";
+  const entry = parse(line, settings);
+  assert.ok(entry, "条目应能解析");
+  assert.deepEqual(
+    entry!.tags,
+    ["#支出/餐饮", "#地点/食堂", "#必要性/必要"],
+    "解析层应保留全部三个标签",
+  );
+
+  // 模拟打开编辑弹窗
+  const data = createDefaultData(settings, entry!);
+  assert.deepEqual(
+    data.extraTags,
+    ["#地点/食堂", "#必要性/必要"],
+    "副标签应被识别为附加标签",
+  );
+
+  // 模拟保存（金额不变，只走一遍构建）
+  const built = buildEntryFromModalData(data, fakePlugin(settings, [entry!]), {
+    indentation: "",
+    listMarker: "-",
+    location: null,
+  });
+
+  assert.deepEqual(
+    built.tags,
+    ["#支出/餐饮", "#地点/食堂", "#必要性/必要"],
+    "保存后三个标签都应还在（修复前只剩主标签）",
+  );
+});
+
+test("[标签] 编辑时修改金额，附加标签仍然保留", () => {
+  const settings = makeSettings();
+  const entry = parse("- #支出/餐饮 午饭 #地点/食堂 💴-35 ➕2026-04-25", settings)!;
+  const data = createDefaultData(settings, entry);
+
+  // 改金额
+  data.accounts = [{ account: "", amount: "50" }];
+
+  const built = buildEntryFromModalData(data, fakePlugin(settings, [entry]), {
+    indentation: "",
+    listMarker: "-",
+    location: null,
+  });
+
+  assert.ok(built.tags.includes("#地点/食堂"), "改金额不应丢副标签");
+});
+
+test("[对照] 无副标签的条目编辑后标签数量不变", () => {
+  const settings = makeSettings();
+  const entry = parse("- #支出/餐饮 午饭 💴-35 ➕2026-04-25", settings)!;
+  const data = createDefaultData(settings, entry);
+  assert.deepEqual(data.extraTags, [], "没有副标签时应为空数组");
+
+  const built = buildEntryFromModalData(data, fakePlugin(settings, [entry]), {
+    indentation: "",
+    listMarker: "-",
+    location: null,
+  });
+  assert.deepEqual(built.tags, ["#支出/餐饮"]);
+});
+
+test("[标签] 转账条目的附加标签也应保留", () => {
+  const settings = makeSettings({ enableAccounts: true });
+  const entry = parse("- #转账 #地点/银行 💳微信💴-100 💳支付宝💴100 ➕2026-04-25", settings)!;
+  const data = createDefaultData(settings, entry);
+  assert.deepEqual(data.extraTags, ["#地点/银行"], "转账的副标签应被保留");
 });
