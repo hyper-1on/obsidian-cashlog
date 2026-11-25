@@ -11,6 +11,9 @@ import { createSection } from "./ui/Section";
 import type { TagNode } from "./TagTree";
 import { addChild, findNode, validateTagSegment } from "./TagTree";
 import { PromptModal } from "./ui/PromptModal";
+
+/** 下拉里「新建」项的哨兵值；标签名不允许含斜杠，因此不会与真实名冲突 */
+const NEW_TAG_OPTION = "\u0000new";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）
@@ -341,33 +344,30 @@ export class CashlogModal extends Modal {
       const current = selected[depth];
       const levelPath = [...path];
 
-      const setting = new Setting(container)
+      new Setting(container)
         .setName(depth === 0 ? t("cashlogModal.category") : "")
         .addDropdown((dropdown) => {
           dropdown.addOption("", t("cashlogModal.noSubTag"));
           for (const node of nodes) {
             dropdown.addOption(node.name, node.name);
           }
+          // 新建入口放在列表里，和导入清单的选择器保持一致
+          if (this.plugin) {
+            dropdown.addOption(NEW_TAG_OPTION, t("import.picker.newOption"));
+          }
           dropdown.setValue(current ?? "");
           dropdown.onChange((value) => {
+            if (value === NEW_TAG_OPTION) {
+              // 建在「当前这一级已选中的节点」下面；没选就建在同一层
+              const parentPath = current ? [...levelPath, current] : levelPath;
+              this.promptAddSubTag(parentPath);
+              return;
+            }
             this.data.subTag = [...levelPath, value].filter((s) => s !== "").join("/");
             // 重建表单：下一级下拉会跟着出现/消失
             this.buildForm();
           });
         });
-
-      // 新建标签：建在「当前这一级已选中的节点」下面；没选就建在同一层
-      if (this.plugin) {
-        setting.addExtraButton((btn) => {
-          btn
-            .setIcon("plus")
-            .setTooltip(t("import.picker.addChild"))
-            .onClick(() => {
-              const parentPath = current ? [...levelPath, current] : levelPath;
-              this.promptAddSubTag(parentPath);
-            });
-        });
-      }
 
       const node = nodes.find((n) => n.name === current);
       if (!node?.children?.length) break;

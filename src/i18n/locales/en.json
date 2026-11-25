@@ -524,5 +524,6 @@
   "tag.segment.empty": "Tag name cannot be empty",
   "tag.segment.hasSpace": "Tag name cannot contain spaces",
   "tag.segment.hasSlash": "Tag name cannot contain slashes",
-  "tag.segment.invalidChars": "Tag name may only contain letters, digits, underscores and hyphens"
+  "tag.segment.invalidChars": "Tag name may only contain letters, digits, underscores and hyphens",
+  "import.picker.newOption": "+ New tag…"
 }
