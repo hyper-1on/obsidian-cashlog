@@ -95,12 +95,17 @@ export class ImportModal extends Modal {
       return;
     }
 
+    // 默认选最近修改的那个，省一次点击
+    let selected = files[0].path;
+
     new Setting(body)
       .setName(t("import.pickFile"))
+      .setDesc(tp("import.fileCount", { count: files.length }))
       .addDropdown((dd) => {
         for (const file of files) dd.addOption(file.path, file.path);
+        dd.setValue(selected);
         dd.onChange((path) => {
-          void this.loadFile(path);
+          selected = path;
         });
       });
 
@@ -116,6 +121,25 @@ export class ImportModal extends Modal {
             this.targetPath = value.trim();
           }),
       );
+
+    // 明确的「下一步」——选文件本身不触发任何事，否则用户不知道怎么继续
+    const footer = this.bodyEl.createDiv({ cls: "cashlog-import-footer" });
+    footer.createSpan({ cls: "cashlog-import-hint", text: t("import.pickFileHint") });
+
+    const cancel = footer.createEl("button", { text: t("import.cancel") });
+    cancel.className = "cashlog-settings-btn";
+    cancel.addEventListener("click", () => this.close());
+
+    const load = footer.createEl("button", { text: t("import.load") });
+    load.className = "cashlog-settings-btn cashlog-settings-btn-primary";
+    load.addEventListener("click", () => {
+      load.disabled = true;
+      load.textContent = t("import.loading");
+      void this.loadFile(selected).finally(() => {
+        load.disabled = false;
+        load.textContent = t("import.load");
+      });
+    });
   }
 
   private async loadFile(path: string): Promise<void> {

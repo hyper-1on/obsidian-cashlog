@@ -508,5 +508,9 @@
   "import.accounts": "Account mapping",
   "import.accountsDesc": "Map the statement's pay channel to an existing account; leave blank to record no account",
   "import.needPermission": "This environment cannot read files directly. Put the statement inside the vault and import from there.",
-  "commands.importStatement": "Import statement"
+  "commands.importStatement": "Import statement",
+  "import.load": "Load statement",
+  "import.loading": "Reading…",
+  "import.pickFileHint": "Choose a file, then click Load statement",
+  "import.fileCount": "{count} importable files found"
 }

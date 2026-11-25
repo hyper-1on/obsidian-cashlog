@@ -2490,3 +2490,9 @@ body.theme-dark .cashlog-settings-content {
   font-size: 0.9em;
   color: var(--text-muted);
 }
+/* 文件选择页底部的操作提示（靠左，按钮靠右） */
+.cashlog-import-hint {
+  margin-right: auto;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}

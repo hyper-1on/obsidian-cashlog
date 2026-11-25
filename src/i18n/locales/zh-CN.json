@@ -508,5 +508,9 @@
   "import.accounts": "账户映射",
   "import.accountsDesc": "按资金渠道把导入的条目归到已有账户；留空表示不记账户",
   "import.needPermission": "当前环境不支持直接读取文件，请把账单放进 vault 再导入",
-  "commands.importStatement": "导入流水"
+  "commands.importStatement": "导入流水",
+  "import.load": "加载账单",
+  "import.loading": "读取中…",
+  "import.pickFileHint": "选好文件后点「加载账单」",
+  "import.fileCount": "找到 {count} 个可导入文件"
 }
