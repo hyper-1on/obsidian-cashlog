@@ -10,7 +10,9 @@ import { App, Modal, Notice, Setting, TFile, normalizePath } from "obsidian";
 import type CashlogPlugin from "../main";
 import { t, tp } from "../i18n";
 import { createSection } from "../ui/Section";
-import { TagPickerModal } from "../ui/TagPicker";
+import { TagPickerModal, type TagPickerRoot } from "../ui/TagPicker";
+import { TagTreeModal } from "../TagTreeModal";
+import { validateTagSegment, findNode } from "../TagTree";
 import { parseImportRows } from "./index";
 import { readStatementFile, isStatementFile } from "./ImportFileReader";
 import { toDrafts, type ImportDraft } from "./draft";
@@ -435,8 +437,8 @@ export class ImportModal extends Modal {
     current: string | null,
   ): void {
     // 支出与收入两棵树都传进去，由选择器的第一级决定用哪棵。
-    // 之前按「组内有没有收入条目」猜一棵树，混合组会选错。
-    const roots = [
+    // 传的是设置对象的引用，因此就地新建能直接写回并保存。
+    const roots: TagPickerRoot[] = [
       {
         mainTag: this.plugin.settings.expenseTag,
         tree: this.plugin.settings.expenseTagTree ?? [],
@@ -447,7 +449,51 @@ export class ImportModal extends Modal {
       },
     ];
 
-    new TagPickerModal(this.app, { roots, current, onPick }).open();
+    new TagPickerModal(this.app, {
+      roots,
+      current,
+      onPick,
+      onCreate: async (root, parentPath, name) => {
+        const check = validateTagSegment(name);
+        if (!check.valid) {
+          new Notice(t(check.message ?? "tag.segment.invalidChars"));
+          return "invalid";
+        }
+
+        const parent = parentPath.length === 0 ? null : findNode(root.tree, parentPath);
+        const siblings = parent ? (parent.children ?? []) : root.tree;
+        if (siblings.some((node) => node.name === name)) return "exists";
+
+        if (parent) {
+          if (!parent.children) parent.children = [];
+          parent.children.push({ name });
+        } else {
+          root.tree.push({ name });
+        }
+
+        // 立即落盘：新建的标签必须进设置，否则关掉弹窗就丢了
+        await this.plugin.saveSettings();
+        return "created";
+      },
+      onManage: () => {
+        const s = this.plugin.settings;
+        new TagTreeModal(
+          this.app,
+          [
+            { key: "expense", title: s.expenseTag, nodes: s.expenseTagTree ?? [] },
+            { key: "income", title: s.incomeTag, nodes: s.incomeTagTree ?? [] },
+            {
+              key: "extra",
+              title: t("panelSettings.extraTagDimensions"),
+              nodes: s.extraTagTrees ?? [],
+            },
+          ],
+          async () => {
+            await this.plugin.saveSettings();
+          },
+        ).open();
+      },
+    }).open();
   }
 
   // ---------------------------------------------------------------- 写入

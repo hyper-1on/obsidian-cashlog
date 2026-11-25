@@ -2521,3 +2521,28 @@ body.theme-dark .cashlog-settings-content {
   opacity: 0.4;
   pointer-events: none;
 }
+/* 级联选择器：行内的「＋」与行内新建输入框 */
+.cashlog-tag-picker-add {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  line-height: 22px;
+}
+
+.cashlog-tag-picker-add:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.cashlog-tag-picker-input {
+  flex: 1;
+  min-width: 0;
+}
+/* 单行输入弹窗（新建标签等场景） */
+.cashlog-prompt-input {
+  width: 100%;
+  margin-bottom: 8px;
+}

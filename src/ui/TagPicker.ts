@@ -1,40 +1,49 @@
 // 通用 · 级联标签选择器
 //
-// 结构：先选大类别（支出 / 收入），再逐级选子标签，任意深度都可以停。
-// 之所以把「大类别」也做成第一级，是因为导入清单里的分组可能同时包含
-// 收入和支出条目 —— 固定成某一个会悄悄把另一类选错。
+// 结构：先选大类别（支出 / 收入），再逐级选子标签，任意深度都可以停；
+// 只选大类别也有效（记成 #支出），与记账表单一致。
 //
-// 三个按钮的语义要分清：
-//   清除 = 只清空当前选择，窗口留着，让你重新选
+// 两个可选的扩展点，由调用方决定是否提供：
+// - onCreate：每级右侧出现「＋」，就地新建标签。传了才显示。
+// - onManage：底部出现「管理所有标签…」，打开完整的树管理。传了才显示。
+//   两者都不传时，选择器就是纯只读的选值控件。
+//
+// 按钮语义：
+//   清除 = 只清空当前选择，窗口留着
 //   取消 = 关闭且不改变原值
 //   确定 = 应用当前选择并关闭
-// 之前「清除」和「取消」是同一个行为，用户没法只清空重选。
 
-import { App, Modal } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import { t, tp } from "../i18n";
 import type { TagNode } from "../TagTree";
 import { parseTagText } from "../TagTree";
 import { createModalButton, createModalButtonRow } from "../ModalHelpers";
 
-/** 一个可选的大类别及其标签树。 */
+/** 一个可选的大类别及其标签树。tree 必须是设置里那棵树的引用，新建才能写回。 */
 export interface TagPickerRoot {
   /** 完整主标签，如 "#支出" */
   mainTag: string;
   /** 展示名，如 "支出"；省略时用主标签去掉 # */
   label?: string;
-  /** 该主标签下的标签树 */
+  /** 该主标签下的标签树（引用，就地修改后由调用方保存） */
   tree: TagNode[];
 }
 
+/** 新建结果。exists 时选择器会跳到那个已有节点。 */
+export type CreateResult = "created" | "exists" | "invalid";
+
 export interface TagPickerOptions {
-  /** 可选的大类别列表；通常传支出树与收入树两项 */
   roots: TagPickerRoot[];
-  /** 当前值，形如 "#支出/餐饮/午餐" */
   current: string | null;
-  /** 是否允许清空为「未指定」，默认允许 */
   allowClear?: boolean;
-  /** 选定后回调；清空时传 null */
   onPick: (tag: string | null) => void;
+  /**
+   * 就地新建标签。parentPath 是相对大类别根的子路径，空数组表示建在根下。
+   * 返回 created 时自动选中新标签；返回 exists 时提示并跳到已有节点。
+   */
+  onCreate?: (root: TagPickerRoot, parentPath: string[], name: string) => Promise<CreateResult>;
+  /** 打开完整的标签管理界面 */
+  onManage?: () => void;
 }
 
 const NO_ROOT = -1;
@@ -42,10 +51,11 @@ const NO_ROOT = -1;
 export class TagPickerModal extends Modal {
   private readonly options: TagPickerOptions;
 
-  /** 选中的大类别下标；NO_ROOT 表示还没选 */
   private rootIndex: number = NO_ROOT;
-  /** 各级子标签名 */
   private selections: string[] = [];
+
+  /** 正在新建的层级下标；null 表示没在新建 */
+  private addingAt: number | null = null;
 
   private pickerHost!: HTMLElement;
 
@@ -66,12 +76,22 @@ export class TagPickerModal extends Modal {
 
     const btnRow = createModalButtonRow(contentEl);
 
+    if (this.options.onManage) {
+      btnRow.appendChild(
+        createModalButton(t("import.picker.manage"), "secondary", () => {
+          // 关掉选择器再开管理：两个 Modal 叠着会让层级和焦点混乱
+          this.close();
+          this.options.onManage?.();
+        }),
+      );
+    }
+
     if (this.options.allowClear !== false) {
       btnRow.appendChild(
         createModalButton(t("import.picker.clear"), "secondary", () => {
-          // 只清空选择，不关窗：清除之后通常还要重新选一个
           this.rootIndex = NO_ROOT;
           this.selections = [];
+          this.addingAt = null;
           this.renderLevels();
         }),
       );
@@ -79,7 +99,6 @@ export class TagPickerModal extends Modal {
 
     btnRow.appendChild(
       createModalButton(t("modal.button.cancel"), "secondary", () => {
-        // 不调用 onPick，保持原值
         this.close();
       }),
     );
@@ -96,38 +115,15 @@ export class TagPickerModal extends Modal {
     this.contentEl.empty();
   }
 
-  /** 当前选中的完整标签；一级都没选时返回 null。 */
+  /** 当前选中的完整标签；只选大类别时返回主标签本身。 */
   currentTag(): string | null {
     if (this.rootIndex === NO_ROOT) return null;
     const root = this.options.roots[this.rootIndex];
     if (!root) return null;
-    // 只选大类别也是有效值：记账界面允许只写「支出」，这里保持一致
     if (this.selections.length === 0) return root.mainTag;
     return `${root.mainTag}/${this.selections.join("/")}`;
   }
 
-  /** 一行：左侧固定宽标签 + 右侧撑满的下拉。 */
-  private createRow(label: string): HTMLElement {
-    const row = this.pickerHost.createDiv({ cls: "cashlog-tag-picker-row" });
-    row.createSpan({ cls: "cashlog-tag-picker-label", text: label });
-    return row;
-  }
-
-  private createSelect(
-    host: HTMLElement,
-    options: Array<{ value: string; label: string }>,
-    current: string,
-  ): HTMLSelectElement {
-    const select = host.createEl("select", { cls: "dropdown cashlog-tag-picker-select" });
-    for (const opt of options) {
-      const el = select.createEl("option", { text: opt.label });
-      el.value = opt.value;
-    }
-    select.value = current;
-    return select;
-  }
-
-  /** 从当前值反推大类别与各级选择，便于再次编辑时回显。 */
   private restoreFromCurrent(): void {
     const current = this.options.current;
     if (!current) return;
@@ -151,23 +147,26 @@ export class TagPickerModal extends Modal {
     }
   }
 
-  /** 渲染大类别下拉 + 各级子标签下拉。 */
   private renderLevels(): void {
     this.pickerHost.empty();
 
     // 第一级：大类别
     const rootRow = this.createRow(t("cashlogModal.category"));
-    const rootSelect = this.createSelect(rootRow, [
-      { value: "", label: "—" },
-      ...this.options.roots.map((root, i) => ({
-        value: String(i),
-        label: root.label ?? parseTagText(root.mainTag),
-      })),
-    ], this.rootIndex === NO_ROOT ? "" : String(this.rootIndex));
+    const rootSelect = this.createSelect(
+      rootRow,
+      [
+        { value: "", label: "—" },
+        ...this.options.roots.map((root, i) => ({
+          value: String(i),
+          label: root.label ?? parseTagText(root.mainTag),
+        })),
+      ],
+      this.rootIndex === NO_ROOT ? "" : String(this.rootIndex),
+    );
     rootSelect.addEventListener("change", () => {
       this.rootIndex = rootSelect.value === "" ? NO_ROOT : Number(rootSelect.value);
-      // 换大类别后旧的子标签不再适用
       this.selections = [];
+      this.addingAt = null;
       this.renderLevels();
     });
 
@@ -183,30 +182,59 @@ export class TagPickerModal extends Modal {
     let level: TagNode[] = root.tree ?? [];
     let index = 0;
 
-    while (level.length > 0) {
+    while (level.length > 0 || this.addingAt === index) {
       const nodes = level;
       const levelIndex = index;
-
-      // 后续层级不写「2 级 / 3 级」：记账界面也是这样，层级靠下拉顺序表达
       const row = this.createRow("");
+
+      if (this.addingAt === levelIndex) {
+        this.renderInlineAdd(row, root, this.selections.slice(0, levelIndex), nodes);
+        this.pickerHost.createDiv({
+          cls: "cashlog-tag-picker-current",
+          text: this.currentTag() ?? t("import.picker.unset"),
+        });
+        return;
+      }
+
       const select = this.createSelect(
         row,
         [{ value: "", label: "—" }, ...nodes.map((n) => ({ value: n.name, label: n.name }))],
         this.selections[levelIndex] ?? "",
       );
       select.addEventListener("change", () => {
-        // 改这一级会重置更深的选择
         this.selections = this.selections.slice(0, levelIndex);
         if (select.value !== "") this.selections.push(select.value);
+        this.addingAt = null;
         this.renderLevels();
       });
 
+      // 每级右侧一个「＋」：新建的是这一级的下一层
+      if (this.options.onCreate) {
+        const addBtn = row.createSpan({ cls: "cashlog-tag-picker-add", text: "+" });
+        addBtn.setAttribute("aria-label", t("import.picker.addChild"));
+        addBtn.addEventListener("click", () => {
+          this.addingAt = levelIndex + 1;
+          this.renderLevels();
+        });
+      }
+
       const chosen = this.selections[levelIndex];
       const node = nodes.find((n) => n.name === chosen);
-      if (!node || !node.children || node.children.length === 0) break;
+      if (!node?.children?.length) break;
 
       level = node.children;
       index++;
+    }
+
+    // 末端还有一个「＋」，用于在第一级为空时也能建
+    if (this.options.onCreate && this.addingAt === null) {
+      const tailRow = this.createRow("");
+      const addBtn = tailRow.createSpan({ cls: "cashlog-tag-picker-add", text: "+" });
+      addBtn.setAttribute("aria-label", t("import.picker.addChild"));
+      addBtn.addEventListener("click", () => {
+        this.addingAt = this.selections.length;
+        this.renderLevels();
+      });
     }
 
     this.pickerHost.createDiv({
@@ -214,5 +242,86 @@ export class TagPickerModal extends Modal {
       text: this.currentTag() ?? t("import.picker.unset"),
     });
   }
-}
 
+  /** 行内新建：输入框 + 确定/取消，不另开弹窗。 */
+  private renderInlineAdd(
+    row: HTMLElement,
+    root: TagPickerRoot,
+    parentPath: string[],
+    siblings: TagNode[],
+  ): void {
+    const input = row.createEl("input", { cls: "cashlog-tag-picker-input" });
+    input.setAttribute("placeholder", t("import.picker.newTagPlaceholder"));
+    input.focus();
+
+    const commit = async (): Promise<void> => {
+      const name = input.value.trim();
+      if (name === "") {
+        this.addingAt = null;
+        this.renderLevels();
+        return;
+      }
+
+      const result = await this.options.onCreate?.(root, parentPath, name);
+      this.addingAt = null;
+
+      if (result === "invalid") {
+        this.renderLevels();
+        return;
+      }
+      if (result === "exists") {
+        // 已存在：提示一句并跳到那个已有节点，而不是报错让人重来
+        new Notice(t("import.picker.exists"));
+        this.selections = [...parentPath, name];
+        this.renderLevels();
+        return;
+      }
+
+      // 新建成功：自动选中它，因为建它就是为了用它
+      this.selections = [...parentPath, name];
+      this.renderLevels();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.addingAt = null;
+        this.renderLevels();
+      }
+    });
+
+    const ok = row.createSpan({ cls: "cashlog-tag-picker-add", text: "✓" });
+    ok.addEventListener("click", () => void commit());
+    const cancel = row.createSpan({ cls: "cashlog-tag-picker-add", text: "×" });
+    cancel.addEventListener("click", () => {
+      this.addingAt = null;
+      this.renderLevels();
+    });
+
+    // 避免 siblings 未使用告警，同时为将来「重名时高亮已有节点」留引用
+    void siblings;
+  }
+
+  private createRow(label: string): HTMLElement {
+    const row = this.pickerHost.createDiv({ cls: "cashlog-tag-picker-row" });
+    row.createSpan({ cls: "cashlog-tag-picker-label", text: label });
+    return row;
+  }
+
+  private createSelect(
+    host: HTMLElement,
+    options: Array<{ value: string; label: string }>,
+    current: string,
+  ): HTMLSelectElement {
+    const select = host.createEl("select", { cls: "dropdown cashlog-tag-picker-select" });
+    for (const opt of options) {
+      const el = select.createEl("option", { text: opt.label });
+      el.value = opt.value;
+    }
+    select.value = current;
+    return select;
+  }
+}

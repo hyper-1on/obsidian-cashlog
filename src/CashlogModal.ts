@@ -9,6 +9,8 @@ import { validateEntryData } from "./EntryEditor";
 import { t, tp, getCurrencySymbol } from "./i18n";
 import { createSection } from "./ui/Section";
 import type { TagNode } from "./TagTree";
+import { addChild, findNode, validateTagSegment } from "./TagTree";
+import { PromptModal } from "./ui/PromptModal";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）
@@ -339,7 +341,7 @@ export class CashlogModal extends Modal {
       const current = selected[depth];
       const levelPath = [...path];
 
-      new Setting(container)
+      const setting = new Setting(container)
         .setName(depth === 0 ? t("cashlogModal.category") : "")
         .addDropdown((dropdown) => {
           dropdown.addOption("", t("cashlogModal.noSubTag"));
@@ -353,6 +355,19 @@ export class CashlogModal extends Modal {
             this.buildForm();
           });
         });
+
+      // 新建标签：建在「当前这一级已选中的节点」下面；没选就建在同一层
+      if (this.plugin) {
+        setting.addExtraButton((btn) => {
+          btn
+            .setIcon("plus")
+            .setTooltip(t("import.picker.addChild"))
+            .onClick(() => {
+              const parentPath = current ? [...levelPath, current] : levelPath;
+              this.promptAddSubTag(parentPath);
+            });
+        });
+      }
 
       const node = nodes.find((n) => n.name === current);
       if (!node?.children?.length) break;
@@ -459,6 +474,42 @@ export class CashlogModal extends Modal {
     return this.data.tagType === "income"
       ? this.settings.incomeTagTree ?? []
       : this.settings.expenseTagTree ?? [];
+  }
+
+  /**
+   * 就地新建子标签。
+   * 已存在时直接跳到它（提示一句），而不是报错让用户重来 ——
+   * 用户要的是「用这个标签」，是不是刚建的不重要。
+   */
+  private promptAddSubTag(parentPath: string[]): void {
+    const plugin = this.plugin;
+    if (!plugin) return;
+
+    new PromptModal(this.app, {
+      title: t("import.picker.newTagTitle"),
+      placeholder: t("import.picker.newTagPlaceholder"),
+      validate: (value) => {
+        const check = validateTagSegment(value);
+        return check.valid ? null : t(check.message ?? "tag.segment.invalidChars");
+      },
+      onConfirm: async (name) => {
+        const tree = this.getTagTree();
+        const parent = parentPath.length === 0 ? null : findNode(tree, parentPath);
+        const siblings = parent ? (parent.children ?? []) : tree;
+
+        if (siblings.some((node) => node.name === name)) {
+          new Notice(t("import.picker.exists"));
+        } else if (!addChild(tree, parentPath, name)) {
+          throw new Error(t("tag.segment.invalidChars"));
+        } else {
+          // 立即落盘，避免关掉弹窗后新建的标签丢失
+          await plugin.saveSettings();
+        }
+
+        this.data.subTag = [...parentPath, name].join("/");
+        this.buildForm();
+      },
+    }).open();
   }
 
   // 渲染描述（条件字段）

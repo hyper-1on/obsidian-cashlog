@@ -515,5 +515,14 @@
   "import.fileCount": "找到 {count} 个可导入文件",
   "import.picker.rootLabel": "大类别",
   "import.picker.pickRootFirst": "请先选择大类别",
-  "import.batchApply": "给这 {count} 条设标签"
+  "import.batchApply": "给这 {count} 条设标签",
+  "import.picker.manage": "管理所有标签…",
+  "import.picker.addChild": "新建下一级标签",
+  "import.picker.newTagPlaceholder": "输入标签名，回车确认",
+  "import.picker.exists": "这个标签已存在，已跳到它上面",
+  "import.picker.newTagTitle": "新建标签",
+  "tag.segment.empty": "标签名不能为空",
+  "tag.segment.hasSpace": "标签名不能包含空格",
+  "tag.segment.hasSlash": "标签名不能包含斜杠",
+  "tag.segment.invalidChars": "标签名只能包含文字、数字、下划线和连字符"
 }

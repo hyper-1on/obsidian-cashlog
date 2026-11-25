@@ -515,5 +515,14 @@
   "import.fileCount": "{count} importable files found",
   "import.picker.rootLabel": "Category",
   "import.picker.pickRootFirst": "Pick a category first",
-  "import.batchApply": "Tag these {count} rows"
+  "import.batchApply": "Tag these {count} rows",
+  "import.picker.manage": "Manage all tags…",
+  "import.picker.addChild": "Create a sub-tag here",
+  "import.picker.newTagPlaceholder": "Tag name, Enter to confirm",
+  "import.picker.exists": "That tag already exists — jumped to it",
+  "import.picker.newTagTitle": "New tag",
+  "tag.segment.empty": "Tag name cannot be empty",
+  "tag.segment.hasSpace": "Tag name cannot contain spaces",
+  "tag.segment.hasSlash": "Tag name cannot contain slashes",
+  "tag.segment.invalidChars": "Tag name may only contain letters, digits, underscores and hyphens"
 }
