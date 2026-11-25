@@ -45,6 +45,7 @@ import { parseMoney, normalizeTradeTime } from "../src/Import/values";
 import { toDrafts } from "../src/Import/draft";
 import { markDuplicates } from "../src/Import/dedupe";
 import { findTransferPairs, pairIndex } from "../src/Import/pairing";
+import { TagPickerModal, NONE_OPTION } from "../src/ui/TagPicker";
 import {
   groupDrafts,
   groupTagState,
@@ -3049,4 +3050,56 @@ test("[标签树] trimPathToTree 丢掉树里不存在的段及其后所有段",
     ["购物"],
     "断点之后即使后面又能对上，也不能接回来",
   );
+});
+// ===== 导入：级联选择器的交互 =====
+
+test("[导入] 选择器：选「不选本级」应收起更深层级", () => {
+  const tree = [{ name: "餐饮", children: [{ name: "午餐" }] }];
+  const modal = new TagPickerModal({} as never, {
+    roots: [{ mainTag: "#支出", tree }],
+    current: "#支出/餐饮/午餐",
+    onPick: () => {},
+  });
+  modal.onOpen();
+
+  const host = modal.contentEl as unknown as FakeElement;
+  let selects = host.querySelectorAll("select");
+  assert.equal(selects.length, 3, `初始应有 3 级（分类/餐饮/午餐），实际 ${selects.length}`);
+
+  // 在「餐饮」这一级选「不选本级」
+  selects[1].value = NONE_OPTION;
+  selects[1].dispatch("change");
+
+  selects = host.querySelectorAll("select");
+  assert.equal(selects.length, 2, `收起后应剩 2 级，实际 ${selects.length}`);
+  assert.equal(modal.currentTag(), "#支出", "路径应退回只到大类别");
+});
+
+test("[导入] 选择器：叶子节点下仍给一层，用于继续新建子标签", () => {
+  const tree = [{ name: "餐饮", children: [{ name: "午餐" }] }];
+  const modal = new TagPickerModal({} as never, {
+    roots: [{ mainTag: "#支出", tree }],
+    current: "#支出/餐饮/午餐",
+    onPick: () => {},
+    onCreate: async () => "created",
+  });
+  modal.onOpen();
+
+  const selects = (modal.contentEl as unknown as FakeElement).querySelectorAll("select");
+  // 分类 / 餐饮 / 午餐 / 午餐下的一层（空，但可新建）
+  assert.equal(selects.length, 4, `叶子下应保留一层，实际 ${selects.length}`);
+});
+
+test("[导入] 选择器：树里不存在的路径段不会渲染成空下拉", () => {
+  const tree = [{ name: "餐饮", children: [{ name: "午餐" }] }];
+  const modal = new TagPickerModal({} as never, {
+    roots: [{ mainTag: "#支出", tree }],
+    current: "#支出/餐饮/不存在/也不存在",
+    onPick: () => {},
+  });
+  modal.onOpen();
+
+  const selects = (modal.contentEl as unknown as FakeElement).querySelectorAll("select");
+  assert.equal(selects.length, 3, `应在断点处停下，实际 ${selects.length} 级`);
+  assert.equal(modal.currentTag(), "#支出/餐饮", "路径应裁到存在的部分");
 });

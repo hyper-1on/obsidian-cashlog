@@ -48,9 +48,9 @@ export interface TagPickerOptions {
 const NO_ROOT = -1;
 /** 下拉里「新建」那一项的哨兵值。标签名不允许含斜杠，因此不会撞上真实名称。
  *  不能用 \u0000：NUL 在 HTML 属性里非法，浏览器会替换成 U+FFFD，比较永远不成立。 */
-const NEW_OPTION = "/__new__";
+export const NEW_OPTION = "/__new__";
 /** 下拉里「本级不选」那一项的哨兵值，同样用斜杠保证不与真实名称冲突 */
-const NONE_OPTION = "/__none__";
+export const NONE_OPTION = "/__none__";
 
 export class TagPickerModal extends Modal {
   private readonly options: TagPickerOptions;
@@ -157,12 +157,12 @@ export class TagPickerModal extends Modal {
     const rootSelect = rootRow.createEl("select", {
       cls: "dropdown cashlog-tag-picker-select",
     });
-    rootSelect.createEl("option", { text: "—" }).value = "";
+    rootSelect.createEl("option", { text: "—", attr: { value: "" } });
     this.options.roots.forEach((root, i) => {
-      const opt = rootSelect.createEl("option", {
+      rootSelect.createEl("option", {
         text: root.label ?? parseTagText(root.mainTag),
+        attr: { value: String(i) },
       });
-      opt.value = String(i);
     });
     rootSelect.value = this.rootIndex === NO_ROOT ? "" : String(this.rootIndex);
     rootSelect.addEventListener("change", () => {
@@ -187,11 +187,13 @@ export class TagPickerModal extends Modal {
     this.selections = trimPathToTree(this.selections, root.tree ?? []);
 
     let nodes: TagNode[] = root.tree ?? [];
-    let levelIndex = 0;
 
+    // 计数写在 for 头部：每次迭代都会新建一个绑定。
+    // 写成循环外的 let 时，所有 change 回调共享同一个变量，
+    // 点击时读到的是循环结束后的值（比如 3），slice(0, 3) 等于没有截断。
     // 逐级渲染。即使这一层没有任何节点也要渲染一行 ——
     // 否则空树时整个界面只剩大类别，用户没有地方点「新建」。
-    for (;;) {
+    for (let levelIndex = 0; ; levelIndex++) {
       const row = this.createRow("");
 
       if (this.addingAt === levelIndex) {
@@ -202,13 +204,13 @@ export class TagPickerModal extends Modal {
       const select = row.createEl("select", {
         cls: "dropdown cashlog-tag-picker-select",
       });
-      select.createEl("option", { text: t("cashlogModal.noSubTag") }).value = NONE_OPTION;
+      select.createEl("option", { text: t("cashlogModal.noSubTag"), attr: { value: NONE_OPTION } });
       for (const node of nodes) {
-        select.createEl("option", { text: node.name }).value = node.name;
+        select.createEl("option", { text: node.name, attr: { value: node.name } });
       }
       // 新建入口就放在列表里：找不着才要建，顺序天然正确
       if (this.options.onCreate) {
-        select.createEl("option", { text: t("import.picker.newOption") }).value = NEW_OPTION;
+        select.createEl("option", { text: t("import.picker.newOption"), attr: { value: NEW_OPTION } });
       }
       select.value = this.selections[levelIndex] ?? NONE_OPTION;
 
@@ -244,7 +246,6 @@ export class TagPickerModal extends Modal {
       if (children.length === 0 && !this.options.onCreate) break;
 
       nodes = children;
-      levelIndex++;
 
       // 防御：标签树理论上不会这么深，避免数据异常时无限渲染
       if (levelIndex > 8) break;
