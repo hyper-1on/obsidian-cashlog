@@ -481,15 +481,15 @@ export class ImportModal extends Modal {
   ): void {
     // 支出与收入两棵树都传进去，由选择器的第一级决定用哪棵。
     // 传的是设置对象的引用，因此就地新建能直接写回并保存。
+    // 必须取设置里那棵树本身的引用。写成 `?? []` 时，
+    // 字段为空会造出临时数组，新建的标签 push 进去后 saveSettings 存不下来。
+    const settings = this.plugin.settings;
+    settings.expenseTagTree ??= [];
+    settings.incomeTagTree ??= [];
+
     const roots: TagPickerRoot[] = [
-      {
-        mainTag: this.plugin.settings.expenseTag,
-        tree: this.plugin.settings.expenseTagTree ?? [],
-      },
-      {
-        mainTag: this.plugin.settings.incomeTag,
-        tree: this.plugin.settings.incomeTagTree ?? [],
-      },
+      { mainTag: settings.expenseTag, tree: settings.expenseTagTree },
+      { mainTag: settings.incomeTag, tree: settings.incomeTagTree },
     ];
 
     new TagPickerModal(this.app, {

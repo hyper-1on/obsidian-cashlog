@@ -2536,3 +2536,17 @@ body.theme-dark .cashlog-settings-content {
   width: 100%;
   margin-bottom: 8px;
 }
+/* 单行输入弹窗：让 Obsidian 的 TextComponent 占满整行，
+   与设置页里其它输入框同一套外观 */
+.cashlog-prompt-setting .setting-item-info {
+  display: none;
+}
+
+.cashlog-prompt-setting .setting-item-control {
+  flex: 1;
+  width: 100%;
+}
+
+.cashlog-prompt-setting .setting-item-control input {
+  width: 100%;
+}

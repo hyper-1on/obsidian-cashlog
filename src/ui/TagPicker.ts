@@ -48,6 +48,8 @@ export interface TagPickerOptions {
 const NO_ROOT = -1;
 /** 下拉里「新建」那一项的哨兵值，不可能与真实标签名冲突（标签名不许含斜杠） */
 const NEW_OPTION = "\u0000new";
+/** 下拉里「本级不选」那一项的哨兵值 */
+const NONE_OPTION = "\u0000none";
 
 export class TagPickerModal extends Modal {
   private readonly options: TagPickerOptions;
@@ -194,7 +196,7 @@ export class TagPickerModal extends Modal {
       const select = row.createEl("select", {
         cls: "dropdown cashlog-tag-picker-select",
       });
-      select.createEl("option", { text: t("cashlogModal.noSubTag") }).value = "";
+      select.createEl("option", { text: t("cashlogModal.noSubTag") }).value = NONE_OPTION;
       for (const node of nodes) {
         select.createEl("option", { text: node.name }).value = node.name;
       }
@@ -202,7 +204,7 @@ export class TagPickerModal extends Modal {
       if (this.options.onCreate) {
         select.createEl("option", { text: t("import.picker.newOption") }).value = NEW_OPTION;
       }
-      select.value = this.selections[levelIndex] ?? "";
+      select.value = this.selections[levelIndex] ?? NONE_OPTION;
 
       select.addEventListener("change", () => {
         if (select.value === NEW_OPTION) {
@@ -212,8 +214,11 @@ export class TagPickerModal extends Modal {
           this.renderLevels();
           return;
         }
+
+        // 选「不选本级」时要把这一级及更深的选择全部丢掉，
+        // 否则会残留一个已经看不见的更深层级
         this.selections = this.selections.slice(0, levelIndex);
-        if (select.value !== "") this.selections.push(select.value);
+        if (select.value !== NONE_OPTION) this.selections.push(select.value);
         this.addingAt = null;
         this.renderLevels();
       });

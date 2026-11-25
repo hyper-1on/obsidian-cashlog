@@ -471,9 +471,14 @@ export class CashlogModal extends Modal {
 
   // 取当前收支类型对应的标签树
   private getTagTree(): TagNode[] {
-    return this.data.tagType === "income"
-      ? this.settings.incomeTagTree ?? []
-      : this.settings.expenseTagTree ?? [];
+    // 返回设置里那棵树本身的引用：写成 `?? []` 时字段为空会返回临时数组，
+    // 在里面新建的标签推不进设置，保存时自然就丢了。
+    if (this.data.tagType === "income") {
+      this.settings.incomeTagTree ??= [];
+      return this.settings.incomeTagTree;
+    }
+    this.settings.expenseTagTree ??= [];
+    return this.settings.expenseTagTree;
   }
 
   /**
