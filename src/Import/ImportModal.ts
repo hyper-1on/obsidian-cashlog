@@ -12,6 +12,7 @@ import { t, tp } from "../i18n";
 import { createSection } from "../ui/Section";
 import { TagPickerModal, type TagPickerRoot } from "../ui/TagPicker";
 import { TagTreeModal } from "../TagTreeModal";
+import { PromptModal } from "../ui/PromptModal";
 import { validateTagSegment, findNode } from "../TagTree";
 import { parseImportRows } from "./index";
 import { readStatementFile, isStatementFile } from "./ImportFileReader";
@@ -21,6 +22,9 @@ import { findTransferPairs } from "./pairing";
 import { groupDrafts, groupTagState, setGroupTag, applyBatch, countUntagged, type GroupKeyFn, type ImportGroup } from "./grouping";
 import { buildLines } from "./writer";
 import type { ImportParseResult } from "./types";
+
+/** 账户下拉里「新建」项的哨兵值，账户名不会包含控制字符 */
+const NEW_ACCOUNT_OPTION = "\u0000new-account";
 
 export interface ImportModalOptions {
   /** 分组维度，默认按交易对方 */
@@ -387,17 +391,56 @@ export class ImportModal extends Modal {
         .addDropdown((dd) => {
           dd.addOption("", "—");
           for (const acc of accounts) dd.addOption(acc, acc);
+          // 和标签选择器一致：新建入口放在列表里
+          dd.addOption(NEW_ACCOUNT_OPTION, t("import.picker.newOption"));
           dd.setValue(this.accountMap.get(channel) ?? "");
           dd.onChange((value) => {
-            this.accountMap.set(channel, value);
-            for (const draft of this.drafts) {
-              if ((draft.record.payMethod ?? "").trim() === channel) {
-                draft.account = value === "" ? null : value;
-              }
+            if (value === NEW_ACCOUNT_OPTION) {
+              this.promptNewAccount(channel);
+              // 退回到「未指定」，等用户建完再选
+              dd.setValue("");
+              return;
             }
+            this.assignAccount(channel, value);
           });
         });
     }
+  }
+
+  /** 把某个资金渠道映射到账户，并同步到对应草稿上。 */
+  private assignAccount(channel: string, account: string): void {
+    this.accountMap.set(channel, account);
+    for (const draft of this.drafts) {
+      if ((draft.record.payMethod ?? "").trim() === channel) {
+        draft.account = account === "" ? null : account;
+      }
+    }
+  }
+
+  /** 就地为某个资金渠道新建账户，建完立即落盘并选上。 */
+  private promptNewAccount(channel: string): void {
+    new PromptModal(this.app, {
+      title: t("import.account.newTitle"),
+      placeholder: t("import.account.newPlaceholder"),
+      validate: (value) => (value.trim() === "" ? t("import.account.emptyName") : null),
+      onConfirm: async (name) => {
+        const settings = this.plugin.settings;
+        if (!settings.accounts) settings.accounts = [];
+
+        if (settings.accounts.includes(name)) {
+          // 已存在就当选中它，不必报错
+          this.assignAccount(channel, name);
+          this.refresh();
+          return;
+        }
+
+        settings.accounts.push(name);
+        // 立即保存，避免关掉弹窗后新建的账户丢失
+        await this.plugin.saveSettings();
+        this.assignAccount(channel, name);
+        this.refresh();
+      },
+    }).open();
   }
 
   private renderFooter(): void {

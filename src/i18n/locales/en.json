@@ -525,5 +525,8 @@
   "tag.segment.hasSpace": "Tag name cannot contain spaces",
   "tag.segment.hasSlash": "Tag name cannot contain slashes",
   "tag.segment.invalidChars": "Tag name may only contain letters, digits, underscores and hyphens",
-  "import.picker.newOption": "+ New tag…"
+  "import.picker.newOption": "+ New tag…",
+  "import.account.newTitle": "New account",
+  "import.account.newPlaceholder": "Account name",
+  "import.account.emptyName": "Account name cannot be empty"
 }

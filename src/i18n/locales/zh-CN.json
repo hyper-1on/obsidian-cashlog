@@ -525,5 +525,8 @@
   "tag.segment.hasSpace": "标签名不能包含空格",
   "tag.segment.hasSlash": "标签名不能包含斜杠",
   "tag.segment.invalidChars": "标签名只能包含文字、数字、下划线和连字符",
-  "import.picker.newOption": "＋ 新建标签…"
+  "import.picker.newOption": "＋ 新建标签…",
+  "import.account.newTitle": "新建账户",
+  "import.account.newPlaceholder": "账户名称",
+  "import.account.emptyName": "账户名不能为空"
 }

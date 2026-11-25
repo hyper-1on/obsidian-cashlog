@@ -2526,6 +2526,10 @@ body.theme-dark .cashlog-settings-content {
 .cashlog-tag-picker-input {
   flex: 1;
   min-width: 0;
+  /* 与同行的下拉取同一套字号与高度，否则输入框看起来比标签小一号 */
+  height: var(--input-height, 30px);
+  font-size: var(--font-ui-small);
+  line-height: var(--line-height-tight, 1.2);
 }
 /* 单行输入弹窗（新建标签等场景） */
 .cashlog-prompt-input {

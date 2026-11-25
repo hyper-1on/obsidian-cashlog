@@ -220,10 +220,21 @@ export class TagPickerModal extends Modal {
 
       const chosen = this.selections[levelIndex];
       const node = nodes.find((n) => n.name === chosen);
-      if (!node?.children?.length) break;
 
-      nodes = node.children;
+      // 没选值就到此为止
+      if (!chosen) break;
+
+      // 选了值就继续下一级 —— 即使这个节点还没有子标签。
+      // 叶子节点也要给出一行（只有「新建」可选），否则没法在它下面建子标签；
+      // 没有 onCreate 时继续下去只会多一行空下拉，没有意义，所以停下。
+      const children = node?.children ?? [];
+      if (children.length === 0 && !this.options.onCreate) break;
+
+      nodes = children;
       levelIndex++;
+
+      // 防御：标签树理论上不会这么深，避免数据异常时无限渲染
+      if (levelIndex > 8) break;
     }
 
     this.pickerHost.createDiv({
