@@ -101,7 +101,8 @@ export class TagPickerModal extends Modal {
     if (this.rootIndex === NO_ROOT) return null;
     const root = this.options.roots[this.rootIndex];
     if (!root) return null;
-    if (this.selections.length === 0) return null;
+    // 只选大类别也是有效值：记账界面允许只写「支出」，这里保持一致
+    if (this.selections.length === 0) return root.mainTag;
     return `${root.mainTag}/${this.selections.join("/")}`;
   }
 
@@ -155,7 +156,7 @@ export class TagPickerModal extends Modal {
     this.pickerHost.empty();
 
     // 第一级：大类别
-    const rootRow = this.createRow(t("import.picker.rootLabel"));
+    const rootRow = this.createRow(t("cashlogModal.category"));
     const rootSelect = this.createSelect(rootRow, [
       { value: "", label: "—" },
       ...this.options.roots.map((root, i) => ({
@@ -186,7 +187,8 @@ export class TagPickerModal extends Modal {
       const nodes = level;
       const levelIndex = index;
 
-      const row = this.createRow(tp("import.picker.level", { n: levelIndex + 2 }));
+      // 后续层级不写「2 级 / 3 级」：记账界面也是这样，层级靠下拉顺序表达
+      const row = this.createRow("");
       const select = this.createSelect(
         row,
         [{ value: "", label: "—" }, ...nodes.map((n) => ({ value: n.name, label: n.name }))],

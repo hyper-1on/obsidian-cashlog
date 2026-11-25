@@ -2516,3 +2516,8 @@ body.theme-dark .cashlog-settings-content {
   flex: 1;
   min-width: 0;
 }
+/* 批量栏在 0 条选中时置灰（栏本身保留，避免"消失"的错觉） */
+.cashlog-import-batch-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}

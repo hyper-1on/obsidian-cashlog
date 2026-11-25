@@ -286,39 +286,54 @@ export class ImportModal extends Modal {
 
     if (!isOpen) return;
 
+    // 勾选变化后要回写批量栏的数字；批量栏在条目之后才创建，
+    // 所以先占一个函数位，等批量栏建好再赋真身。
+    let syncBatch = (): void => {};
+
     // 展开：逐条
     for (const draft of group.drafts) {
-      this.renderDraftRow(row, draft);
+      this.renderDraftRow(row, draft, () => syncBatch());
     }
 
-    // 组内批量栏
-    const selected = group.drafts.filter((d) => d.selected);
-    if (selected.length > 0) {
-      const batch = row.createDiv({ cls: "cashlog-import-batch" });
-      batch.createSpan({
-        cls: "cashlog-import-batch-label",
-        text: `选中 ${selected.length} 条`,
-      });
-      const applyBtn = batch.createSpan({
-        cls: "cashlog-import-batch-apply",
-        text: tp("import.batchApply", { count: selected.length }),
-      });
-      applyBtn.addEventListener("click", () => {
-        this.openTagPicker(null, (tag) => {
-          applyBatch(selected, { mainTag: tag });
-          this.refresh();
-        }, null);
-      });
-    }
+    // 组内批量栏。始终渲染，0 条时按钮置灰 ——
+    // 否则反选到 0 条时整条栏消失，用户会以为功能坏了。
+    const batch = row.createDiv({ cls: "cashlog-import-batch" });
+    const batchLabel = batch.createSpan({ cls: "cashlog-import-batch-label" });
+    const applyBtn = batch.createSpan({ cls: "cashlog-import-batch-apply" });
+
+    syncBatch = (): void => {
+      const count = group.drafts.filter((d) => d.selected).length;
+      batchLabel.setText(`选中 ${count} 条`);
+      applyBtn.setText(tp("import.batchApply", { count }));
+      applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
+    };
+
+    applyBtn.addEventListener("click", () => {
+      // 必须在这里重新过滤：渲染时捕获的数组不会跟着勾选变化
+      const picked = group.drafts.filter((d) => d.selected);
+      if (picked.length === 0) return;
+      this.openTagPicker(null, (tag) => {
+        applyBatch(picked, { mainTag: tag });
+        this.refresh();
+      }, null);
+    });
+
+    syncBatch();
   }
 
-  private renderDraftRow(container: HTMLElement, draft: ImportDraft): void {
+  private renderDraftRow(
+    container: HTMLElement,
+    draft: ImportDraft,
+    onSelectedChange?: () => void,
+  ): void {
     const row = container.createDiv({ cls: "cashlog-import-draft" });
 
     const checkbox = row.createEl("input", { attr: { type: "checkbox" } });
     checkbox.checked = draft.selected;
     checkbox.addEventListener("change", () => {
       draft.selected = checkbox.checked;
+      // 通知组内批量栏刷新「选中 N 条」
+      onSelectedChange?.();
     });
 
     row.createSpan({
