@@ -45,7 +45,7 @@ import { parseMoney, normalizeTradeTime } from "../src/Import/values";
 import { toDrafts } from "../src/Import/draft";
 import { markDuplicates } from "../src/Import/dedupe";
 import { findTransferPairs, pairIndex } from "../src/Import/pairing";
-import { TagPickerModal, NONE_OPTION } from "../src/ui/TagPicker";
+import { TagPickerModal, NONE_OPTION, NEW_OPTION } from "../src/ui/TagPicker";
 import {
   groupDrafts,
   groupTagState,
@@ -3102,4 +3102,47 @@ test("[导入] 选择器：树里不存在的路径段不会渲染成空下拉",
   const selects = (modal.contentEl as unknown as FakeElement).querySelectorAll("select");
   assert.equal(selects.length, 3, `应在断点处停下，实际 ${selects.length} 级`);
   assert.equal(modal.currentTag(), "#支出/餐饮", "路径应裁到存在的部分");
+});
+test("[导入] 选择器：输完名字不按回车直接点确定，也应建出标签并选中", async () => {
+  const tree: TagNode[] = [];
+  const created: string[] = [];
+  let picked: string | null = null;
+
+  const modal = new TagPickerModal({} as never, {
+    roots: [{ mainTag: "#支出", tree }],
+    current: null,
+    onPick: (tag) => {
+      picked = tag;
+    },
+    onCreate: async (_root, parentPath, name) => {
+      created.push([...parentPath, name].join("/"));
+      return "created";
+    },
+  });
+  modal.onOpen();
+
+  const host = modal.contentEl as unknown as FakeElement;
+
+  // 先选大类别，子级下拉才会出现
+  const rootSelect = host.querySelectorAll("select")[0];
+  rootSelect.value = "0";
+  rootSelect.dispatch("change");
+
+  // 第一级子标签选「＋ 新建标签…」→ 该行变输入框
+  const levelSelect = host.querySelectorAll("select")[1];
+  levelSelect.value = NEW_OPTION;
+  levelSelect.dispatch("change");
+
+  // 输入名字，但不按回车
+  const input = host.querySelectorAll(".cashlog-tag-picker-input")[0];
+  assert.ok(input, "应出现新建输入框");
+  input.value = "新标签";
+
+  // 直接点「确定」（按钮行最后一个）
+  const buttons = host.querySelectorAll("button");
+  buttons[buttons.length - 1].dispatch("click");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.deepEqual(created, ["新标签"], "确定时应先把未提交的名字建出来");
+  assert.equal(picked, "#支出/新标签", "并且选中它");
 });

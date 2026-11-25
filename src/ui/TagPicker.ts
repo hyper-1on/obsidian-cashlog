@@ -63,6 +63,17 @@ export class TagPickerModal extends Modal {
 
   private pickerHost!: HTMLElement;
 
+  /**
+   * 正在输入、尚未提交的新标签。
+   * 用户可能输完名字直接点「确定」而不按回车 —— 那时必须先把这条建出来，
+   * 否则名字丢了、路径也还是旧的。
+   */
+  private pendingCreate: {
+    root: TagPickerRoot;
+    parentPath: string[];
+    input: HTMLInputElement;
+  } | null = null;
+
   constructor(app: App, options: TagPickerOptions) {
     super(app);
     this.options = options;
@@ -106,7 +117,9 @@ export class TagPickerModal extends Modal {
     );
 
     btnRow.appendChild(
-      createModalButton(t("import.picker.confirm"), "primary", () => {
+      createModalButton(t("import.picker.confirm"), "primary", async () => {
+        // 输完名字直接点确定（没按回车）也要把这条建出来并选中
+        await this.commitPendingInput();
         this.options.onPick(this.currentTag());
         this.close();
       }),
@@ -257,6 +270,26 @@ export class TagPickerModal extends Modal {
     });
   }
 
+  /**
+   * 提交尚未按回车的行内输入。
+   * 名字为空就什么都不做；建成功或已存在都选中它。
+   */
+  private async commitPendingInput(): Promise<void> {
+    const pending = this.pendingCreate;
+    if (!pending) return;
+    this.pendingCreate = null;
+
+    const name = pending.input.value.trim();
+    if (name === "") return;
+
+    const result = await this.options.onCreate?.(pending.root, pending.parentPath, name);
+    if (result === "invalid") return;
+    if (result === "exists") {
+      new Notice(t("import.picker.exists"));
+    }
+    this.selections = [...pending.parentPath, name];
+  }
+
   /** 行内新建：标准文本输入框，回车确认、Esc 取消。 */
   private renderInlineAdd(
     row: HTMLElement,
@@ -267,10 +300,12 @@ export class TagPickerModal extends Modal {
       cls: "cashlog-tag-picker-input",
       attr: { type: "text", placeholder: t("import.picker.newTagPlaceholder") },
     });
+    this.pendingCreate = { root, parentPath, input };
     input.focus();
 
     const cancel = (): void => {
       this.addingAt = null;
+      this.pendingCreate = null;
       this.renderLevels();
     };
 
@@ -283,6 +318,7 @@ export class TagPickerModal extends Modal {
 
       const result = await this.options.onCreate?.(root, parentPath, name);
       this.addingAt = null;
+      this.pendingCreate = null;
 
       if (result === "invalid") {
         // onCreate 已经提示过原因，退回下拉让用户重选
