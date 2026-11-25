@@ -12,8 +12,8 @@ import type { TagNode } from "./TagTree";
 import { addChild, findNode, validateTagSegment } from "./TagTree";
 import { PromptModal } from "./ui/PromptModal";
 
-/** 下拉里「新建」项的哨兵值；标签名不允许含斜杠，因此不会与真实名冲突 */
-const NEW_TAG_OPTION = "\u0000new";
+/** 下拉里「新建」项的哨兵值。标签名不允许含斜杠；不能用 \u0000，NUL 在 HTML 属性里会被替换。 */
+const NEW_TAG_OPTION = "/__new__";
 import { moment } from "./types";
 
 // 账户行数据（UI 用）

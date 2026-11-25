@@ -23,8 +23,8 @@ import { groupDrafts, groupTagState, setGroupTag, applyBatch, countUntagged, typ
 import { buildLines } from "./writer";
 import type { ImportParseResult } from "./types";
 
-/** 账户下拉里「新建」项的哨兵值，账户名不会包含控制字符 */
-const NEW_ACCOUNT_OPTION = "\u0000new-account";
+/** 账户下拉里「新建」项的哨兵值；账户名不含斜杠，故不会撞名 */
+const NEW_ACCOUNT_OPTION = "/__new-account__";
 
 export interface ImportModalOptions {
   /** 分组维度，默认按交易对方 */

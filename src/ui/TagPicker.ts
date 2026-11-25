@@ -46,10 +46,11 @@ export interface TagPickerOptions {
 }
 
 const NO_ROOT = -1;
-/** 下拉里「新建」那一项的哨兵值，不可能与真实标签名冲突（标签名不许含斜杠） */
-const NEW_OPTION = "\u0000new";
-/** 下拉里「本级不选」那一项的哨兵值 */
-const NONE_OPTION = "\u0000none";
+/** 下拉里「新建」那一项的哨兵值。标签名不允许含斜杠，因此不会撞上真实名称。
+ *  不能用 \u0000：NUL 在 HTML 属性里非法，浏览器会替换成 U+FFFD，比较永远不成立。 */
+const NEW_OPTION = "/__new__";
+/** 下拉里「本级不选」那一项的哨兵值，同样用斜杠保证不与真实名称冲突 */
+const NONE_OPTION = "/__none__";
 
 export class TagPickerModal extends Modal {
   private readonly options: TagPickerOptions;
