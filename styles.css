@@ -2496,3 +2496,23 @@ body.theme-dark .cashlog-settings-content {
   font-size: 0.85em;
   color: var(--text-muted);
 }
+/* 级联标签选择器：自绘行，避免 Setting 的 padding 让每行高度不一 */
+.cashlog-tag-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  min-height: 30px;
+}
+
+.cashlog-tag-picker-label {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.cashlog-tag-picker-select {
+  flex: 1;
+  min-width: 0;
+}

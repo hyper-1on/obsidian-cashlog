@@ -514,5 +514,6 @@
   "import.pickFileHint": "选好文件后点「加载账单」",
   "import.fileCount": "找到 {count} 个可导入文件",
   "import.picker.rootLabel": "大类别",
-  "import.picker.pickRootFirst": "请先选择大类别"
+  "import.picker.pickRootFirst": "请先选择大类别",
+  "import.batchApply": "给这 {count} 条设标签"
 }

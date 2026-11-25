@@ -301,7 +301,7 @@ export class ImportModal extends Modal {
       });
       const applyBtn = batch.createSpan({
         cls: "cashlog-import-batch-apply",
-        text: "设标签",
+        text: tp("import.batchApply", { count: selected.length }),
       });
       applyBtn.addEventListener("click", () => {
         this.openTagPicker(null, (tag) => {

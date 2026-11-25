@@ -10,7 +10,7 @@
 //   确定 = 应用当前选择并关闭
 // 之前「清除」和「取消」是同一个行为，用户没法只清空重选。
 
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal } from "obsidian";
 import { t, tp } from "../i18n";
 import type { TagNode } from "../TagTree";
 import { parseTagText } from "../TagTree";
@@ -105,6 +105,27 @@ export class TagPickerModal extends Modal {
     return `${root.mainTag}/${this.selections.join("/")}`;
   }
 
+  /** 一行：左侧固定宽标签 + 右侧撑满的下拉。 */
+  private createRow(label: string): HTMLElement {
+    const row = this.pickerHost.createDiv({ cls: "cashlog-tag-picker-row" });
+    row.createSpan({ cls: "cashlog-tag-picker-label", text: label });
+    return row;
+  }
+
+  private createSelect(
+    host: HTMLElement,
+    options: Array<{ value: string; label: string }>,
+    current: string,
+  ): HTMLSelectElement {
+    const select = host.createEl("select", { cls: "dropdown cashlog-tag-picker-select" });
+    for (const opt of options) {
+      const el = select.createEl("option", { text: opt.label });
+      el.value = opt.value;
+    }
+    select.value = current;
+    return select;
+  }
+
   /** 从当前值反推大类别与各级选择，便于再次编辑时回显。 */
   private restoreFromCurrent(): void {
     const current = this.options.current;
@@ -134,21 +155,20 @@ export class TagPickerModal extends Modal {
     this.pickerHost.empty();
 
     // 第一级：大类别
-    new Setting(this.pickerHost)
-      .setName(t("import.picker.rootLabel"))
-      .addDropdown((dd) => {
-        dd.addOption("", "—");
-        this.options.roots.forEach((root, i) => {
-          dd.addOption(String(i), root.label ?? parseTagText(root.mainTag));
-        });
-        dd.setValue(this.rootIndex === NO_ROOT ? "" : String(this.rootIndex));
-        dd.onChange((value) => {
-          this.rootIndex = value === "" ? NO_ROOT : Number(value);
-          // 换大类别后旧的子标签不再适用
-          this.selections = [];
-          this.renderLevels();
-        });
-      });
+    const rootRow = this.createRow(t("import.picker.rootLabel"));
+    const rootSelect = this.createSelect(rootRow, [
+      { value: "", label: "—" },
+      ...this.options.roots.map((root, i) => ({
+        value: String(i),
+        label: root.label ?? parseTagText(root.mainTag),
+      })),
+    ], this.rootIndex === NO_ROOT ? "" : String(this.rootIndex));
+    rootSelect.addEventListener("change", () => {
+      this.rootIndex = rootSelect.value === "" ? NO_ROOT : Number(rootSelect.value);
+      // 换大类别后旧的子标签不再适用
+      this.selections = [];
+      this.renderLevels();
+    });
 
     if (this.rootIndex === NO_ROOT) {
       this.pickerHost.createDiv({
@@ -166,19 +186,18 @@ export class TagPickerModal extends Modal {
       const nodes = level;
       const levelIndex = index;
 
-      new Setting(this.pickerHost)
-        .setName(tp("import.picker.level", { n: levelIndex + 2 }))
-        .addDropdown((dd) => {
-          dd.addOption("", "—");
-          for (const node of nodes) dd.addOption(node.name, node.name);
-          dd.setValue(this.selections[levelIndex] ?? "");
-          dd.onChange((value) => {
-            // 改这一级会重置更深的选择
-            this.selections = this.selections.slice(0, levelIndex);
-            if (value !== "") this.selections.push(value);
-            this.renderLevels();
-          });
-        });
+      const row = this.createRow(tp("import.picker.level", { n: levelIndex + 2 }));
+      const select = this.createSelect(
+        row,
+        [{ value: "", label: "—" }, ...nodes.map((n) => ({ value: n.name, label: n.name }))],
+        this.selections[levelIndex] ?? "",
+      );
+      select.addEventListener("change", () => {
+        // 改这一级会重置更深的选择
+        this.selections = this.selections.slice(0, levelIndex);
+        if (select.value !== "") this.selections.push(select.value);
+        this.renderLevels();
+      });
 
       const chosen = this.selections[levelIndex];
       const node = nodes.find((n) => n.name === chosen);
