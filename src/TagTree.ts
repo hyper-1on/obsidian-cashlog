@@ -210,3 +210,25 @@ export function stripCommonPrefix(keys: string[]): Map<string, string> {
   }
   return result;
 }
+
+/**
+ * 把一条选择路径裁剪成「树里真实存在的前缀」。
+ *
+ * 用途：选择器要把当前值回显成逐级下拉，而当前值可能来自旧数据或已删掉的标签。
+ * 不裁剪的话，找不到对应选项的那一级会渲染成空白下拉，而且还会继续往下长出更多空行。
+ *
+ * 返回第一个断点之前的连续有效段；全部无效返回空数组。
+ */
+export function trimPathToTree(path: string[], nodes: TagNode[]): string[] {
+  const out: string[] = [];
+  let level = nodes;
+
+  for (const name of path) {
+    const node = level.find((n) => n.name === name);
+    if (!node) break;
+    out.push(name);
+    level = node.children ?? [];
+  }
+
+  return out;
+}

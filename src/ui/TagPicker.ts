@@ -15,7 +15,7 @@
 import { App, Modal, Notice } from "obsidian";
 import { t } from "../i18n";
 import type { TagNode } from "../TagTree";
-import { parseTagText } from "../TagTree";
+import { parseTagText, trimPathToTree } from "../TagTree";
 import { createModalButton, createModalButtonRow } from "../ModalHelpers";
 
 /** 一个可选的大类别及其标签树。tree 必须是设置里那棵树的引用，新建才能写回。 */
@@ -180,6 +180,11 @@ export class TagPickerModal extends Modal {
     }
 
     const root = this.options.roots[this.rootIndex];
+
+    // 先把选择路径裁到树里真实存在的前缀：旧数据、已删掉的标签都会在这里被丢掉，
+    // 否则找不到选项的那一级会渲染成空白下拉，还会继续往下长出更多空行。
+    this.selections = trimPathToTree(this.selections, root.tree ?? []);
+
     let nodes: TagNode[] = root.tree ?? [];
     let levelIndex = 0;
 
@@ -224,10 +229,12 @@ export class TagPickerModal extends Modal {
       });
 
       const chosen = this.selections[levelIndex];
-      const node = nodes.find((n) => n.name === chosen);
 
       // 没选值就到此为止
       if (!chosen) break;
+
+      const node = nodes.find((n) => n.name === chosen);
+      if (!node) break;
 
       // 选了值就继续下一级 —— 即使这个节点还没有子标签。
       // 叶子节点也要给出一行（只有「新建」可选），否则没法在它下面建子标签；

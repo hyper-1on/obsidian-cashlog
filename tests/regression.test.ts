@@ -16,7 +16,7 @@ import {
 import { buildEntryFromModalData, validateEntryData } from "../src/EntryEditor";
 import { validateSubTagName } from "../src/TagValidation";
 import { CashlogModal, createDefaultData } from "../src/CashlogModal";
-import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode, parseTagText } from "../src/TagTree";
+import { legacyToTree, pruneEmptyNodes, flattenTree, validateTagPath, stripCommonPrefix, tagToGroupKey, addChild, removeNode, parseTagText, trimPathToTree } from "../src/TagTree";
 import { resolveEntryLine } from "../src/EntryLocator";
 import { t, tp, initI18n, getLocale, getCurrencySymbol, setCurrencyOverride } from "../src/i18n";
 import { computeIntegerPercentages, renderChartTable } from "../src/ChartRenderer";
@@ -3033,4 +3033,20 @@ test("[导入] 批量应用：标签、描述、附加标签一次写完", () =>
 test("[导入] 未指定标签的条数统计", () => {
   const drafts = [makeDraft(), makeDraft({ mainTag: "#支出/餐饮" }), makeDraft()];
   assert.equal(countUntagged(drafts), 2);
+});
+test("[标签树] trimPathToTree 丢掉树里不存在的段及其后所有段", () => {
+  const tree = [
+    { name: "餐饮", children: [{ name: "午餐" }] },
+    { name: "购物" },
+  ];
+
+  assert.deepEqual(trimPathToTree(["餐饮", "午餐"], tree), ["餐饮", "午餐"], "完整有效时原样返回");
+  assert.deepEqual(trimPathToTree(["餐饮", "晚餐"], tree), ["餐饮"], "第二段不存在就只留第一段");
+  assert.deepEqual(trimPathToTree(["不存在"], tree), [], "首段不存在就全丢");
+  assert.deepEqual(trimPathToTree([], tree), [], "空路径返回空");
+  assert.deepEqual(
+    trimPathToTree(["购物", "午餐"], tree),
+    ["购物"],
+    "断点之后即使后面又能对上，也不能接回来",
+  );
 });
