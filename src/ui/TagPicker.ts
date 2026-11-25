@@ -1,23 +1,34 @@
 // 通用 · 级联标签选择器
 //
-// 一个标签树 + 主标签前缀 → 逐级下拉，任意深度都可以停。
-// 记账表单、导入清单、以后任何要给条目选标签的地方都用这一份。
+// 结构：先选大类别（支出 / 收入），再逐级选子标签，任意深度都可以停。
+// 之所以把「大类别」也做成第一级，是因为导入清单里的分组可能同时包含
+// 收入和支出条目 —— 固定成某一个会悄悄把另一类选错。
 //
-// 为什么做成独立小弹窗而不是一行下拉：
-// 清单里每行都要选标签，行内放下拉会把表格挤变形；
-// 弹窗可以只显示「当前值 → 改」，并且能同时展示级联的每一级。
+// 三个按钮的语义要分清：
+//   清除 = 只清空当前选择，窗口留着，让你重新选
+//   取消 = 关闭且不改变原值
+//   确定 = 应用当前选择并关闭
+// 之前「清除」和「取消」是同一个行为，用户没法只清空重选。
 
 import { App, Modal, Setting } from "obsidian";
-import { t } from "../i18n";
+import { t, tp } from "../i18n";
 import type { TagNode } from "../TagTree";
 import { parseTagText } from "../TagTree";
 import { createModalButton, createModalButtonRow } from "../ModalHelpers";
 
-export interface TagPickerOptions {
-  /** 主标签，如 "#支出"；为空表示标签树本身就是完整路径（附加维度） */
+/** 一个可选的大类别及其标签树。 */
+export interface TagPickerRoot {
+  /** 完整主标签，如 "#支出" */
   mainTag: string;
+  /** 展示名，如 "支出"；省略时用主标签去掉 # */
+  label?: string;
   /** 该主标签下的标签树 */
   tree: TagNode[];
+}
+
+export interface TagPickerOptions {
+  /** 可选的大类别列表；通常传支出树与收入树两项 */
+  roots: TagPickerRoot[];
   /** 当前值，形如 "#支出/餐饮/午餐" */
   current: string | null;
   /** 是否允许清空为「未指定」，默认允许 */
@@ -26,23 +37,22 @@ export interface TagPickerOptions {
   onPick: (tag: string | null) => void;
 }
 
-/**
- * 打开级联标签选择器。
- *
- * 继承 Obsidian 的 Modal：清单本身是 Modal，在它上面再叠自绘浮层
- * 容易被父级的点击穿透与 focus 处理搅乱；交给 Obsidian 管层级更稳。
- */
+const NO_ROOT = -1;
+
 export class TagPickerModal extends Modal {
   private readonly options: TagPickerOptions;
 
-  /** 当前选到第几级：selections[0] 是一级名，依此类推 */
+  /** 选中的大类别下标；NO_ROOT 表示还没选 */
+  private rootIndex: number = NO_ROOT;
+  /** 各级子标签名 */
   private selections: string[] = [];
+
   private pickerHost!: HTMLElement;
 
   constructor(app: App, options: TagPickerOptions) {
     super(app);
     this.options = options;
-    this.selections = this.initSelections();
+    this.restoreFromCurrent();
   }
 
   onOpen(): void {
@@ -55,14 +65,25 @@ export class TagPickerModal extends Modal {
     this.renderLevels();
 
     const btnRow = createModalButtonRow(contentEl);
+
     if (this.options.allowClear !== false) {
       btnRow.appendChild(
         createModalButton(t("import.picker.clear"), "secondary", () => {
-          this.options.onPick(null);
-          this.close();
+          // 只清空选择，不关窗：清除之后通常还要重新选一个
+          this.rootIndex = NO_ROOT;
+          this.selections = [];
+          this.renderLevels();
         }),
       );
     }
+
+    btnRow.appendChild(
+      createModalButton(t("modal.button.cancel"), "secondary", () => {
+        // 不调用 onPick，保持原值
+        this.close();
+      }),
+    );
+
     btnRow.appendChild(
       createModalButton(t("import.picker.confirm"), "primary", () => {
         this.options.onPick(this.currentTag());
@@ -77,30 +98,68 @@ export class TagPickerModal extends Modal {
 
   /** 当前选中的完整标签；一级都没选时返回 null。 */
   currentTag(): string | null {
+    if (this.rootIndex === NO_ROOT) return null;
+    const root = this.options.roots[this.rootIndex];
+    if (!root) return null;
     if (this.selections.length === 0) return null;
-    const path = this.selections.join("/");
-    return this.options.mainTag ? `${this.options.mainTag}/${path}` : `#${path}`;
+    return `${root.mainTag}/${this.selections.join("/")}`;
   }
 
-  /** 从当前值反推各级选择，方便再次编辑时回显。 */
-  private initSelections(): string[] {
+  /** 从当前值反推大类别与各级选择，便于再次编辑时回显。 */
+  private restoreFromCurrent(): void {
     const current = this.options.current;
-    if (!current) return [];
+    if (!current) return;
 
-    let plain = parseTagText(current);
-    const mainPlain = parseTagText(this.options.mainTag);
-    if (mainPlain && plain === mainPlain) return [];
-    if (mainPlain && plain.startsWith(`${mainPlain}/`)) {
-      plain = plain.slice(mainPlain.length + 1);
+    const plain = parseTagText(current);
+    for (let i = 0; i < this.options.roots.length; i++) {
+      const mainPlain = parseTagText(this.options.roots[i].mainTag);
+      if (plain === mainPlain) {
+        this.rootIndex = i;
+        this.selections = [];
+        return;
+      }
+      if (plain.startsWith(`${mainPlain}/`)) {
+        this.rootIndex = i;
+        this.selections = plain
+          .slice(mainPlain.length + 1)
+          .split("/")
+          .filter((s) => s !== "");
+        return;
+      }
     }
-    return plain.split("/").filter((s) => s !== "");
   }
 
-  /** 渲染每一级下拉；某一级有子标签时自动追加下一级。 */
+  /** 渲染大类别下拉 + 各级子标签下拉。 */
   private renderLevels(): void {
     this.pickerHost.empty();
 
-    let level: TagNode[] = this.options.tree;
+    // 第一级：大类别
+    new Setting(this.pickerHost)
+      .setName(t("import.picker.rootLabel"))
+      .addDropdown((dd) => {
+        dd.addOption("", "—");
+        this.options.roots.forEach((root, i) => {
+          dd.addOption(String(i), root.label ?? parseTagText(root.mainTag));
+        });
+        dd.setValue(this.rootIndex === NO_ROOT ? "" : String(this.rootIndex));
+        dd.onChange((value) => {
+          this.rootIndex = value === "" ? NO_ROOT : Number(value);
+          // 换大类别后旧的子标签不再适用
+          this.selections = [];
+          this.renderLevels();
+        });
+      });
+
+    if (this.rootIndex === NO_ROOT) {
+      this.pickerHost.createDiv({
+        cls: "cashlog-tag-picker-current",
+        text: t("import.picker.pickRootFirst"),
+      });
+      return;
+    }
+
+    const root = this.options.roots[this.rootIndex];
+    let level: TagNode[] = root.tree ?? [];
     let index = 0;
 
     while (level.length > 0) {
@@ -108,7 +167,7 @@ export class TagPickerModal extends Modal {
       const levelIndex = index;
 
       new Setting(this.pickerHost)
-        .setName(`${levelIndex + 1} 级`)
+        .setName(tp("import.picker.level", { n: levelIndex + 2 }))
         .addDropdown((dd) => {
           dd.addOption("", "—");
           for (const node of nodes) dd.addOption(node.name, node.name);
@@ -135,3 +194,4 @@ export class TagPickerModal extends Modal {
     });
   }
 }
+

@@ -415,25 +415,24 @@ export class ImportModal extends Modal {
   // ---------------------------------------------------------------- 标签选择
 
   private openTagPicker(
-    draft: ImportDraft | null,
+    _draft: ImportDraft | null,
     onPick: (tag: string | null) => void,
     current: string | null,
   ): void {
-    const isIncome = draft
-      ? draft.entryType === "income"
-      : this.groups.some((g) => g.drafts.some((d) => d.entryType === "income"));
+    // 支出与收入两棵树都传进去，由选择器的第一级决定用哪棵。
+    // 之前按「组内有没有收入条目」猜一棵树，混合组会选错。
+    const roots = [
+      {
+        mainTag: this.plugin.settings.expenseTag,
+        tree: this.plugin.settings.expenseTagTree ?? [],
+      },
+      {
+        mainTag: this.plugin.settings.incomeTag,
+        tree: this.plugin.settings.incomeTagTree ?? [],
+      },
+    ];
 
-    const mainTag = isIncome ? this.plugin.settings.incomeTag : this.plugin.settings.expenseTag;
-    const tree = isIncome
-      ? (this.plugin.settings.incomeTagTree ?? [])
-      : (this.plugin.settings.expenseTagTree ?? []);
-
-    new TagPickerModal(this.app, {
-      mainTag,
-      tree,
-      current,
-      onPick,
-    }).open();
+    new TagPickerModal(this.app, { roots, current, onPick }).open();
   }
 
   // ---------------------------------------------------------------- 写入

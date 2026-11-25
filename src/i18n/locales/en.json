@@ -512,5 +512,7 @@
   "import.load": "Load statement",
   "import.loading": "Reading…",
   "import.pickFileHint": "Choose a file, then click Load statement",
-  "import.fileCount": "{count} importable files found"
+  "import.fileCount": "{count} importable files found",
+  "import.picker.rootLabel": "Category",
+  "import.picker.pickRootFirst": "Pick a category first"
 }
