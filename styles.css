@@ -2306,3 +2306,187 @@ body.theme-dark .cashlog-settings-content {
   margin-top: 2px;
   margin-bottom: 2px;
 }
+/* ===== 导入流水（ImportModal） ===== */
+/* 与设置卡片同一套观感：分区用 --cashlog-sect-* token，行内用 flex + 弱色。 */
+.cashlog-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cashlog-sect-gap, 1.15em);
+}
+
+.cashlog-import-summary {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.cashlog-import-skip {
+  margin-top: 4px;
+  font-size: 0.85em;
+  color: var(--text-faint);
+}
+
+.cashlog-import-empty {
+  padding: 12px 0;
+  color: var(--text-faint);
+  font-size: 0.9em;
+}
+
+/* 一组 = 一个交易对方 */
+.cashlog-import-group {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px 0;
+}
+
+.cashlog-import-group:last-child {
+  border-bottom: none;
+}
+
+.cashlog-import-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+}
+
+.cashlog-import-group-toggle {
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.cashlog-import-group-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashlog-import-group-count {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 标签按钮：组级与条目级共用，空值用虚框区分 */
+.cashlog-import-tag-btn {
+  font-size: 0.85em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--background-modifier-hover);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashlog-import-tag-btn:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.cashlog-import-tag-btn-empty {
+  background: transparent;
+  border: 1px dashed var(--background-modifier-border);
+  color: var(--text-faint);
+}
+
+/* 展开后的单条 */
+.cashlog-import-draft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 3px 24px;
+  font-size: 0.9em;
+}
+
+.cashlog-import-draft-time {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cashlog-import-draft-amount {
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cashlog-import-draft-desc {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+
+.cashlog-import-badge {
+  font-size: 0.75em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.cashlog-import-badge-warn {
+  background: var(--background-modifier-error);
+  color: var(--text-error);
+}
+
+/* 组内批量栏 */
+.cashlog-import-batch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px 24px;
+  font-size: 0.85em;
+}
+
+.cashlog-import-batch-label {
+  color: var(--text-muted);
+}
+
+.cashlog-import-batch-apply {
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+}
+
+.cashlog-import-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.cashlog-import-warn {
+  margin-right: auto;
+  font-size: 0.85em;
+  color: var(--text-error);
+}
+
+/* ===== 级联标签选择器（TagPickerModal） ===== */
+.cashlog-tag-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cashlog-tag-picker-current {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  font-size: 0.9em;
+  color: var(--text-muted);
+}

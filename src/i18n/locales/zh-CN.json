@@ -3,7 +3,6 @@
   "menu.chart": "账目图表",
   "commands.insertChart": "插入图表",
   "commands.openPanel": "打开 Cashlog 面板",
-
   "validation.tagName.empty": "标签名称不能为空",
   "validation.tagName.tooLong": "标签名称不能超过25个字符",
   "validation.tagName.hasSpace": "标签名称不能包含空格",
@@ -25,7 +24,6 @@
   "validation.amountRequired": "请填写金额",
   "validation.transferOutRequired": "请填写转出金额",
   "validation.transferInRequired": "请填写转入金额",
-
   "notice.migrated": "已迁移 {count} 条记账记录",
   "notice.deleted": "已删除 {count} 条记账记录",
   "notice.transferred": "已将 {count} 条记账记录转移到「{target}」",
@@ -48,7 +46,6 @@
   "notice.editAccountFailed": "修改账户名失败: {message}",
   "notice.deleteAccountFailed": "删除账户失败: {message}",
   "notice.editBalanceFailed": "修改余额失败: {message}",
-
   "error.queryError": "查询错误: {error}",
   "error.noData": "暂无数据，请先添加记账记录",
   "error.unsupportedChartType": "不支持的图表类型: {type}",
@@ -78,7 +75,6 @@
   "attachment.defaultName": "附件",
   "attachment.numberedName": "附件{n}",
   "dashboard.categoryRankHint": "仅显示前 5 项；点击标题查看全部分类占比",
-
   "modal.button.cancel": "取消",
   "modal.button.confirm": "确认",
   "modal.button.processing": "处理中...",
@@ -91,7 +87,6 @@
   "modal.placeholder.subTagName": "输入子标签名称",
   "modal.placeholder.accountName": "输入账户名称",
   "modal.modifyLabel": "修改{label}",
-
   "cashlogModal.title": "创建或编辑记账",
   "cashlogModal.group.type": "类型",
   "cashlogModal.group.detail": "明细",
@@ -134,7 +129,6 @@
   "cashlogModal.timeDesc": "可选",
   "cashlogModal.selectTime": "选择时间",
   "cashlogModal.remove": "✕",
-
   "chartModal.title": "插入图表",
   "chartModal.groupTypeTags": "类型与标签",
   "chartModal.groupConditions": "其他筛选条件",
@@ -247,7 +241,6 @@
   "chartModal.valueType.inflow": "进账",
   "chartModal.valueType.outflow": "转出",
   "chartModal.valueType.netflow": "进账-转出",
-
   "settings.heading": "Cashlog 记账设置",
   "settings.section.tags": "标签设置",
   "settings.section.subTagPresets": "子标签预设",
@@ -329,7 +322,6 @@
   "settings.period.monthlyFull": "按月",
   "settings.period.yearlyFull": "按年",
   "settings.period.customFull": "自定义",
-
   "panelSettings.sectionTags": "标签设置",
   "panelSettings.sectionAccounts": "账户设置",
   "panelSettings.sectionAttachments": "附件设置",
@@ -392,7 +384,6 @@
   "panelSettings.monthStartDay": "每月起始日期",
   "panelSettings.weekStartDay": "每周起始日",
   "panelSettings.monthStartDayDesc": "1-28 之间的数字",
-
   "dashboard.period.day": "按日",
   "dashboard.period.week": "按周",
   "dashboard.period.month": "按月",
@@ -434,7 +425,6 @@
   "dashboard.accountDetail.balanceAdjust": "余额调整",
   "dashboard.accountDetail.currentBalance": "当前余额",
   "dashboard.accountDetail.entries": "记账记录",
-
   "renderer.totalExpense": "总支出：💴{amount}",
   "renderer.totalIncome": "总收入：💴{amount}",
   "renderer.netBalance": "余额：💴{amount}",
@@ -445,7 +435,6 @@
   "renderer.totalIncomeChart": "总收入：{amount}",
   "renderer.totalExpenseChart": "总支出：{amount}",
   "renderer.netBalanceChart": "净收支：{amount}",
-
   "chart.label.income": "收入",
   "chart.label.expense": "支出",
   "chart.label.balance": "净收支",
@@ -461,7 +450,6 @@
   "chart.field.account": "账户",
   "chart.field.attachment": "附件",
   "chart.field.type": "类型",
-
   "view.panelTitle": "Cashlog 面板",
   "view.tab.dashboard": "仪表盘",
   "view.tab.settings": "设置",
@@ -478,8 +466,7 @@
   "subTagManager.addButton": "添加",
   "subTagManager.invalid": "名称不合法：{reason}",
   "subTagManager.exists": "{name} 已存在",
-  "subTagManager.removed": "已删除 {name}"
-,
+  "subTagManager.removed": "已删除 {name}",
   "panelSettings.extraTagDimensions": "附加标签维度",
   "tagTree.title": "标签管理",
   "tagTree.hint": "每行右侧三个按钮：改名、添加子标签、删除（删除需连点两次确认）",
@@ -496,7 +483,30 @@
   "tagTree.renameHint": "直接在行内输入新名称",
   "tagTree.renamePrompt": "新名称",
   "tagTree.addChildPrompt": "为「{name}」添加子标签",
-  "panelSettings.manageAllTags": "管理所有标签"
-,
-  "tagTree.childrenTitle": "子标签"
+  "panelSettings.manageAllTags": "管理所有标签",
+  "tagTree.childrenTitle": "子标签",
+  "import.title": "导入流水",
+  "import.pickFile": "选择账单文件",
+  "import.noFiles": "vault 里没有找到 .csv 或 .xlsx 文件，请先把账单放进来",
+  "import.targetNote": "目标笔记",
+  "import.targetNoteDesc": "导入的条目会追加到这个文件末尾；不存在会自动创建",
+  "import.parseFailed": "无法识别这个文件的格式，可能不是支持的账单导出",
+  "import.summary": "识别为 {source}，共 {count} 条",
+  "import.expand": "展开",
+  "import.collapse": "收起",
+  "import.picker.title": "选择标签",
+  "import.picker.clear": "清除",
+  "import.picker.confirm": "确定",
+  "import.picker.unset": "未指定",
+  "import.picker.level": "{n} 级",
+  "import.commit": "导入",
+  "import.cancel": "取消",
+  "import.untagged": "{count} 条未指定标签",
+  "import.done": "已导入 {count} 条",
+  "import.noTarget": "请先选择目标笔记",
+  "import.nothingSelected": "没有可导入的条目",
+  "import.accounts": "账户映射",
+  "import.accountsDesc": "按资金渠道把导入的条目归到已有账户；留空表示不记账户",
+  "import.needPermission": "当前环境不支持直接读取文件，请把账单放进 vault 再导入",
+  "commands.importStatement": "导入流水"
 }

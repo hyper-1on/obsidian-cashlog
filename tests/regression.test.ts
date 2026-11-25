@@ -1628,7 +1628,8 @@ test("[静态] 使用 createSection 的文件必须 import 它（踩过的坑：
     if (file.replace(/\\/g, "/").endsWith("ui/Section.ts")) continue;
     const src = readFileSync(file, "utf8");
     if (!/\bcreateSection\s*\(/.test(src)) continue;
-    if (!/import\s*\{[^}]*\bcreateSection\b[^}]*\}\s*from\s*"\.\/ui\/Section"/.test(src)) {
+    // 允许 "./ui/Section" 与 "../ui/Section"：子目录里的文件用后者
+    if (!/import\s*\{[^}]*\bcreateSection\b[^}]*\}\s*from\s*"[^"]*ui\/Section"/.test(src)) {
       offenders.push(file.replace(SRC_DIR!, "").replace(/\\/g, "/"));
     }
   }

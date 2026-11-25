@@ -3,7 +3,6 @@
   "menu.chart": "Cashlog chart",
   "commands.insertChart": "Insert chart",
   "commands.openPanel": "Open Cashlog panel",
-
   "validation.tagName.empty": "Tag name cannot be empty",
   "validation.tagName.tooLong": "Tag name cannot exceed 25 characters",
   "validation.tagName.hasSpace": "Tag name cannot contain spaces",
@@ -25,7 +24,6 @@
   "validation.amountRequired": "Please enter an amount",
   "validation.transferOutRequired": "Please enter the transfer-out amount",
   "validation.transferInRequired": "Please enter the transfer-in amount",
-
   "notice.migrated": "Migrated {count} entries",
   "notice.deleted": "Deleted {count} entries",
   "notice.transferred": "Transferred {count} entries to \"{target}\"",
@@ -48,7 +46,6 @@
   "notice.editAccountFailed": "Failed to edit account name: {message}",
   "notice.deleteAccountFailed": "Failed to delete account: {message}",
   "notice.editBalanceFailed": "Failed to edit balance: {message}",
-
   "error.queryError": "Query error: {error}",
   "error.noData": "No data yet, please add entries first",
   "error.unsupportedChartType": "Unsupported chart type: {type}",
@@ -78,7 +75,6 @@
   "attachment.defaultName": "Attachment",
   "attachment.numberedName": "Attachment {n}",
   "dashboard.categoryRankHint": "Top 5 only - click the title for the full breakdown",
-
   "modal.button.cancel": "Cancel",
   "modal.button.confirm": "Confirm",
   "modal.button.processing": "Processing...",
@@ -91,7 +87,6 @@
   "modal.placeholder.subTagName": "Enter sub-tag name",
   "modal.placeholder.accountName": "Enter account name",
   "modal.modifyLabel": "Edit {label}",
-
   "cashlogModal.title": "Create or Edit Entry",
   "cashlogModal.group.type": "Type",
   "cashlogModal.group.detail": "Details",
@@ -134,7 +129,6 @@
   "cashlogModal.timeDesc": "Optional",
   "cashlogModal.selectTime": "Select time",
   "cashlogModal.remove": "✕",
-
   "chartModal.title": "Insert Chart",
   "chartModal.groupTypeTags": "Type & Tags",
   "chartModal.groupConditions": "Other Filters",
@@ -247,7 +241,6 @@
   "chartModal.valueType.inflow": "Inflow",
   "chartModal.valueType.outflow": "Outflow",
   "chartModal.valueType.netflow": "Inflow - Outflow",
-
   "settings.heading": "Cashlog Settings",
   "settings.section.tags": "Tag Settings",
   "settings.section.subTagPresets": "Sub-tag Presets",
@@ -329,7 +322,6 @@
   "settings.period.monthlyFull": "Monthly",
   "settings.period.yearlyFull": "Yearly",
   "settings.period.customFull": "Custom",
-
   "panelSettings.sectionTags": "Tag Settings",
   "panelSettings.sectionAccounts": "Account Settings",
   "panelSettings.sectionAttachments": "Attachment Settings",
@@ -392,7 +384,6 @@
   "panelSettings.monthStartDay": "Month start day",
   "panelSettings.weekStartDay": "Week start day",
   "panelSettings.monthStartDayDesc": "A number between 1 and 28",
-
   "dashboard.period.day": "Daily",
   "dashboard.period.week": "Weekly",
   "dashboard.period.month": "Monthly",
@@ -434,7 +425,6 @@
   "dashboard.accountDetail.balanceAdjust": "Balance adjustment",
   "dashboard.accountDetail.currentBalance": "Current balance",
   "dashboard.accountDetail.entries": "Entries",
-
   "renderer.totalExpense": "Total expense: ${amount}",
   "renderer.totalIncome": "Total income: ${amount}",
   "renderer.netBalance": "Balance: ${amount}",
@@ -445,7 +435,6 @@
   "renderer.totalIncomeChart": "Total income: {amount}",
   "renderer.totalExpenseChart": "Total expense: {amount}",
   "renderer.netBalanceChart": "Net balance: {amount}",
-
   "chart.label.income": "Income",
   "chart.label.expense": "Expense",
   "chart.label.balance": "Net balance",
@@ -461,7 +450,6 @@
   "chart.field.type": "Type",
   "chart.field.tag": "Tag",
   "chart.field.time": "Time",
-
   "view.panelTitle": "Cashlog Panel",
   "view.tab.dashboard": "Dashboard",
   "view.tab.settings": "Settings",
@@ -478,8 +466,7 @@
   "subTagManager.addButton": "Add",
   "subTagManager.invalid": "Invalid name: {reason}",
   "subTagManager.exists": "{name} already exists",
-  "subTagManager.removed": "Deleted {name}"
-,
+  "subTagManager.removed": "Deleted {name}",
   "panelSettings.extraTagDimensions": "Extra tag dimensions",
   "tagTree.title": "Manage tags",
   "tagTree.hint": "Three buttons per row: rename, add sub-tag, delete (delete needs two clicks)",
@@ -496,7 +483,30 @@
   "tagTree.renameHint": "Type the new name inline",
   "tagTree.renamePrompt": "New name",
   "tagTree.addChildPrompt": "Add a child tag to {name}",
-  "panelSettings.manageAllTags": "Manage all tags"
-,
-  "tagTree.childrenTitle": "Sub-tags"
+  "panelSettings.manageAllTags": "Manage all tags",
+  "tagTree.childrenTitle": "Sub-tags",
+  "import.title": "Import statement",
+  "import.pickFile": "Statement file",
+  "import.noFiles": "No .csv or .xlsx found in the vault. Put the statement there first.",
+  "import.targetNote": "Target note",
+  "import.targetNoteDesc": "Entries are appended to this file; it is created if missing",
+  "import.parseFailed": "Could not recognise this file as a supported statement export",
+  "import.summary": "Detected {source}, {count} rows",
+  "import.expand": "Expand",
+  "import.collapse": "Collapse",
+  "import.picker.title": "Choose tag",
+  "import.picker.clear": "Clear",
+  "import.picker.confirm": "OK",
+  "import.picker.unset": "Not set",
+  "import.picker.level": "Level {n}",
+  "import.commit": "Import",
+  "import.cancel": "Cancel",
+  "import.untagged": "{count} without a tag",
+  "import.done": "Imported {count} entries",
+  "import.noTarget": "Pick a target note first",
+  "import.nothingSelected": "Nothing to import",
+  "import.accounts": "Account mapping",
+  "import.accountsDesc": "Map the statement's pay channel to an existing account; leave blank to record no account",
+  "import.needPermission": "This environment cannot read files directly. Put the statement inside the vault and import from there.",
+  "commands.importStatement": "Import statement"
 }

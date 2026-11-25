@@ -5,6 +5,7 @@ import { CashlogEntry } from "./CashlogEntry";
 import { parseCashlogLineLenient } from "./CashlogSerializer";
 import { CashlogModal, EditableEntryData } from "./CashlogModal";
 import { ChartModal } from "./ChartModal";
+import { ImportModal } from "./Import/ImportModal";
 import { nonCashlogRegex } from "./CashlogRegex";
 import { EntryLocation } from "./EntryLocation";
 import { buildEntryFromModalData } from "./EntryEditor";
@@ -31,6 +32,16 @@ export function addCommands(plugin: CashlogPlugin): void {
       const modal = new ChartModal(plugin.app, plugin, editor);
       modal.open();
       return true;
+    },
+  });
+
+  plugin.addCommand({
+    id: "import-statement",
+    name: t("commands.importStatement"),
+    icon: "upload",
+    // 不依赖光标位置，直接开弹窗
+    callback: () => {
+      new ImportModal(plugin.app, plugin).open();
     },
   });
 
