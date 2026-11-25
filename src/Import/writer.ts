@@ -87,3 +87,19 @@ export function buildLines(drafts: ImportDraft[]): {
 
   return { lines, skipped };
 }
+
+/**
+ * 把跳过原因汇总成一句人话：相同原因合并计数。
+ *
+ * 之前直接把前几条原因用「、」连起来，结果 76 条同一个原因会显示成
+ * 「未指定标签、未指定标签、未指定标签」，看起来像报了三次。
+ */
+export function formatSkipSummary(skipped: Array<{ reason: string }>): string {
+  const counts = new Map<string, number>();
+  for (const item of skipped) {
+    counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => (count > 1 ? `${reason} ×${count}` : reason))
+    .join("；");
+}

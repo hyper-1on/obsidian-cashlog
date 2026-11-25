@@ -20,7 +20,7 @@ import { toDrafts, type ImportDraft } from "./draft";
 import { markDuplicates } from "./dedupe";
 import { findTransferPairs } from "./pairing";
 import { groupDrafts, groupTagState, setGroupTag, applyBatch, countUntagged, type GroupKeyFn, type ImportGroup } from "./grouping";
-import { buildLines } from "./writer";
+import { buildLines, formatSkipSummary } from "./writer";
 import type { ImportParseResult } from "./types";
 
 /** 账户下拉里「新建」项的哨兵值；账户名不含斜杠，故不会撞名 */
@@ -570,7 +570,7 @@ export class ImportModal extends Modal {
 
       new Notice(tp("import.done", { count: lines.length }));
       if (skipped.length > 0) {
-        new Notice(`${skipped.length} 条未写入：${skipped.slice(0, 3).map((s) => s.reason).join("、")}`);
+        new Notice(`${skipped.length} 条未写入：${formatSkipSummary(skipped)}`);
       }
 
       this.options.onDone?.(lines.length);

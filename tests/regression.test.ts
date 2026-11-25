@@ -46,6 +46,7 @@ import { toDrafts } from "../src/Import/draft";
 import { markDuplicates } from "../src/Import/dedupe";
 import { findTransferPairs, pairIndex } from "../src/Import/pairing";
 import { TagPickerModal, NONE_OPTION, NEW_OPTION } from "../src/ui/TagPicker";
+import { formatSkipSummary } from "../src/Import/writer";
 import {
   groupDrafts,
   groupTagState,
@@ -3145,4 +3146,24 @@ test("[导入] 选择器：输完名字不按回车直接点确定，也应建�
 
   assert.deepEqual(created, ["新标签"], "确定时应先把未提交的名字建出来");
   assert.equal(picked, "#支出/新标签", "并且选中它");
+});
+test("[导入] 跳过原因应合并同类项，不能把同一个原因重复列三遍", () => {
+  const skipped = [
+    { reason: "未指定标签" },
+    { reason: "未指定标签" },
+    { reason: "未指定标签" },
+    { reason: "未勾选" },
+  ];
+
+  const summary = formatSkipSummary(skipped);
+  assert.equal(summary, "未指定标签 ×3；未勾选", `实际: ${summary}`);
+  assert.equal(
+    (summary.match(/未指定标签/g) ?? []).length,
+    1,
+    "同一个原因只应出现一次",
+  );
+
+  // 单条时不需要 ×1
+  assert.equal(formatSkipSummary([{ reason: "未指定标签" }]), "未指定标签");
+  assert.equal(formatSkipSummary([]), "");
 });
