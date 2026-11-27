@@ -3,7 +3,9 @@
 > **Fork notice** — This is a fork of
 > [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog),
 > maintained at [hyper-1on/obsidian-cashlog](https://github.com/hyper-1on/obsidian-cashlog).
-> See **[PATCH.md](PATCH.md)** for the complete list of defects fixed relative to upstream.
+> Current version **1.1.0**, kept for personal use: it publishes no releases and
+> is not submitted to the community store. See **[PATCH.md](PATCH.md)** for the
+> defects fixed relative to upstream.
 
 A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record income and expenses directly in your Markdown notes with an emoji-based syntax, then query, visualize, and analyze your data — all within your vault.
 
@@ -29,6 +31,15 @@ A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record i
 - **Attachments** — Attach receipt photos to entries, stored in your vault
 - **i18n** — English and Chinese UI
 - **Natural language dates** — `date today`, `date last month`, `date 14 days ago`, etc.
+
+## What this release changes
+
+1.1.0 **fixes defects only and adds no features**: the capability set is the
+same as upstream 1.0.3, minus data-safety, query-engine, display-control, panel,
+chart, performance and i18n problems. The full list is in [PATCH.md](PATCH.md).
+
+New capabilities such as the tag tree and statement import live on the `dev`
+branch and only ship from 1.2.0 onward.
 
 ## Quick Start
 

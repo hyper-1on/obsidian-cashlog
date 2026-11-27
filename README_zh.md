@@ -2,7 +2,8 @@
 
 > **Fork 声明** — 本仓库是
 > [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog) 的 fork，
-> 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护。
+> 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护，当前版本
+> **1.1.0**，只作自用，不发布 release、不提交社区市场。
 > 相对上游的全部缺陷修复见 **[PATCH.md](PATCH.md)**。
 
 一款 Obsidian 个人记账插件。使用 Emoji 标记直接在 Markdown 笔记中记录收支，然后通过查询语法检索、可视化和分析数据 — 所有操作都在你的 Vault 中完成。
@@ -25,6 +26,14 @@
 - **附件功能** — 为记账条目附加票据照片，存储在 Vault 中
 - **国际化** — 支持中英文界面
 - **自然语言日期** — 支持 `date today`、`date last month`、`date 14 days ago` 等
+
+## 本版本相对上游
+
+1.1.0 **只修缺陷，不加功能**：能力范围与上游 1.0.3 相同，但修复了数据安全、
+查询引擎、显示控制、面板、图表、性能与国际化共七组问题。完整清单见
+[PATCH.md](PATCH.md)。
+
+标签树、账单导入等新增能力在 `dev` 分支开发，从 1.2.0 起才包含。
 
 ## 快速开始
 
