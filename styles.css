@@ -2581,13 +2581,13 @@ body.theme-dark .cashlog-settings-content {
    Modal 默认高度随内容变化，内容一变高居中的基准就变，看起来就是整个弹窗在漂；
    固定高度后，内容只在内部滚动，外框位置不动。 */
 .modal:has(.cashlog-import-modal) {
-  height: 80vh;
-  max-height: 80vh;
+  /* 不写死高度：加载完成后由脚本按内容高度锁一次像素值。
+     写死 vh 会在内容少时留一大片空白；不锁则每次内容变化都重新居中。 */
+  max-height: 84vh;
 }
 
 .modal:has(.cashlog-tag-picker-modal) {
-  height: 60vh;
-  max-height: 60vh;
+  max-height: 84vh;
 }
 
 /* 导入清单自身滚动，避免整页跟着内容长度走 */

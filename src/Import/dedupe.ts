@@ -50,9 +50,9 @@ export function markDuplicates(
       }
     }
 
-    // 2. 方向未定的先不比对
+    // 2. 方向未定的先不比对。勾选状态不动 ——
+    // 这里改了会让分组的初始勾选状态各不相同，看起来像随机结果。
     if (draft.status === "needs-direction") {
-      draft.selected = false;
       continue;
     }
 
@@ -61,9 +61,10 @@ export function markDuplicates(
       const key = weakKey(draftDate(draft), draft.record.amount, draft.entryType);
       const hit = existingCount.get(key) ?? 0;
       if (hit > 0) {
+        // 只标记，不取消勾选：取消会让「哪些组是勾上的」取决于数据内容，
+        // 用户看到的是「有的全勾、有的没勾」，无法判断是不是自己点过。
         draft.status = "suspect-duplicate";
         draft.duplicateCount = hit;
-        draft.selected = false;
       }
     }
   }

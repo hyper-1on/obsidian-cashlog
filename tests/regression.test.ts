@@ -2868,7 +2868,7 @@ test("[导入] 去重：同一订单号在本次文件里只保留第一条", ()
   assert.equal(drafts[1].selected, false);
 });
 
-test("[导入] 去重：笔记里已有同日同额同方向的记录时标疑似并默认不勾", () => {
+test("[导入] 去重：笔记里已有同日同额同方向的记录时只标记，不改勾选", () => {
   const record = {
     source: "alipay_ledger" as const,
     rowIndex: 1,
@@ -2893,7 +2893,11 @@ test("[导入] 去重：笔记里已有同日同额同方向的记录时标疑�
 
   assert.equal(drafts[0].status, "suspect-duplicate");
   assert.equal(drafts[0].duplicateCount, 1);
-  assert.equal(drafts[0].selected, false, "疑似重复默认不勾，避免重复入账");
+  assert.equal(
+    drafts[0].selected,
+    true,
+    "只标记不改勾选：否则「哪些组是勾上的」取决于数据内容，看起来像随机结果",
+  );
 
   // 对照组：金额不同就不应命中
   const other = toDrafts([{ ...record, amount: 35.51 }]);

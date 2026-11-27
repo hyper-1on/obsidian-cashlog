@@ -73,6 +73,8 @@ export class ImportModal extends Modal {
   private expanded = new Set<string>();
   /** 分组排序方式 */
   private sort: GroupSort = "bill";
+  /** 是否已经按内容高度锁过一次弹窗高度 */
+  private heightLocked = false;
 
 
   private bodyEl!: HTMLElement;
@@ -261,6 +263,29 @@ export class ImportModal extends Modal {
 
     // 底部操作
     this.renderFooter();
+
+    // 首次渲染完就把高度固定下来
+    this.lockHeight();
+  }
+
+  /**
+   * 清单渲染完后，把弹窗高度锁成当时的像素值。
+   *
+   * 不写死 vh：内容少时会留一大片空白。
+   * 不锁：每次展开都改变高度，垂直居中就跟着重算，看起来像界面在跳。
+   * 锁一次之后，内容增减只在内部滚动，外框和中心都不动。
+   */
+  private lockHeight(): void {
+    if (this.heightLocked) return;
+    const el = this.modalEl as HTMLElement | undefined;
+    if (!el || typeof el.getBoundingClientRect !== "function") return;
+
+    const rect = el.getBoundingClientRect();
+    if (rect.height <= 0) return;
+
+    const max = window.innerHeight * 0.84;
+    el.style.height = `${Math.min(rect.height, max)}px`;
+    this.heightLocked = true;
   }
 
   /** 组是否「全选」：组内所有条目都勾着。直接从草稿推导，不另存状态。 */
@@ -329,96 +354,120 @@ export class ImportModal extends Modal {
   }
 
   private renderGroup(container: HTMLElement, group: ImportGroup): void {
-    const state = groupTagState(group);
-    const total = group.drafts.reduce((s, d) => s + d.record.amount, 0);
-    const isOpen = this.expanded.has(group.key);
-
     const row = container.createDiv({ cls: "cashlog-import-group" });
     const head = row.createDiv({ cls: "cashlog-import-group-head" });
+    const body = row.createDiv({ cls: "cashlog-import-group-body" });
 
+    // 整组只构建一次；展开、勾选都只重绘 body，不重建整张清单。
+    // 重建会让弹窗高度和滚动位置一起变，表现为界面「跳」。
     const groupCheck = head.createEl("input", { attr: { type: "checkbox" } });
     groupCheck.className = "cashlog-import-group-check";
-    groupCheck.checked = this.isGroupSelected(group);
-    // 部分选中显示半选框，避免看起来像「全选」或「全不选」
-    groupCheck.indeterminate = this.isGroupPartial(group);
-    groupCheck.addEventListener("change", () => {
-      // 勾母类即勾选该组全部条目
-      const checked = groupCheck.checked;
-      for (const draft of group.drafts) draft.selected = checked;
-      this.refresh();
-    });
 
-    const toggle = head.createSpan({
-      cls: "cashlog-import-group-toggle",
-      text: isOpen ? "▾" : "▸",
-    });
-    toggle.addEventListener("click", () => {
-      if (isOpen) this.expanded.delete(group.key);
-      else this.expanded.add(group.key);
-      this.refresh();
-    });
+    const toggle = head.createSpan({ cls: "cashlog-import-group-toggle" });
 
+    const total = group.drafts.reduce((sum, d) => sum + d.record.amount, 0);
     head.createSpan({ cls: "cashlog-import-group-name", text: group.key });
     head.createSpan({
       cls: "cashlog-import-group-count",
       text: `${group.drafts.length} 条 · ${total.toFixed(2)}`,
     });
 
-    // 组级标签：显示「空 / 具体值 / 自定义」
-    const tagBtn = head.createSpan({
-      cls: "cashlog-import-tag-btn",
-      text:
+    const tagBtn = head.createSpan({ cls: "cashlog-import-tag-btn" });
+
+    const syncHead = (): void => {
+      groupCheck.checked = this.isGroupSelected(group);
+      groupCheck.indeterminate = this.isGroupPartial(group);
+      toggle.setText(this.expanded.has(group.key) ? "▾" : "▸");
+    };
+
+    const syncTagBtn = (): void => {
+      const state = groupTagState(group);
+      tagBtn.setText(
         state.kind === "uniform"
           ? (state.tag ?? "").replace(/^#/, "")
           : state.kind === "mixed"
             ? "自定义"
             : "未指定",
-    });
-    if (state.kind !== "uniform") {
-      tagBtn.addClass("cashlog-import-tag-btn-empty");
-    }
-    tagBtn.addEventListener("click", () => {
-      this.openTagPicker(null, (tag) => {
-        setGroupTag(group, tag);
-        this.refresh();
-      }, state.tag);
-    });
-
-    if (!isOpen) return;
-
-    // 勾选变化后要回写批量栏的数字；批量栏在条目之后才创建，
-    // 所以先占一个函数位，等批量栏建好再赋真身。
-    let syncBatch = (): void => {};
-
-    // 展开：逐条
-    for (const draft of group.drafts) {
-      this.renderDraftRow(row, draft, () => syncBatch());
-    }
-
-    // 组内批量栏。始终渲染，0 条时按钮置灰 ——
-    // 否则反选到 0 条时整条栏消失，用户会以为功能坏了。
-    const batch = row.createDiv({ cls: "cashlog-import-batch" });
-    const batchLabel = batch.createSpan({ cls: "cashlog-import-batch-label" });
-    const applyBtn = batch.createSpan({ cls: "cashlog-import-batch-apply" });
-
-    syncBatch = (): void => {
-      const count = group.drafts.filter((d) => d.selected).length;
-      batchLabel.setText(`选中 ${count} 条`);
-      applyBtn.setText(tp("import.batchApply", { count }));
-      applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
+      );
+      tagBtn.toggleClass("cashlog-import-tag-btn-empty", state.kind !== "uniform");
     };
 
-    applyBtn.addEventListener("click", () => {
-      // 必须在这里重新过滤：渲染时捕获的数组不会跟着勾选变化
-      const picked = group.drafts.filter((d) => d.selected);
-      if (picked.length === 0) return;
-      this.openTagPicker(null, (tag) => {
-        applyBatch(picked, { mainTag: tag });
-        this.refresh();
-      }, null);
+    /** 重绘组内条目与批量栏。展开状态由 expanded 决定。 */
+    const paintBody = (): void => {
+      body.empty();
+      if (!this.expanded.has(group.key)) return;
+
+      for (const draft of group.drafts) {
+        this.renderDraftRow(body, draft, () => {
+          syncBatch();
+          syncHead();
+        });
+      }
+
+      const batch = body.createDiv({ cls: "cashlog-import-batch" });
+      const batchLabel = batch.createSpan({ cls: "cashlog-import-batch-label" });
+      const applyBtn = batch.createSpan({ cls: "cashlog-import-batch-apply" });
+
+      syncBatch = (): void => {
+        const count = group.drafts.filter((d) => d.selected).length;
+        batchLabel.setText(`选中 ${count} 条`);
+        applyBtn.setText(tp("import.batchApply", { count }));
+        applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
+      };
+
+      applyBtn.addEventListener("click", () => {
+        // 点击时重新过滤：渲染时捕获的数组不跟着勾选变化
+        const picked = group.drafts.filter((d) => d.selected);
+        if (picked.length === 0) return;
+        this.openTagPicker(
+          null,
+          (tag) => {
+            applyBatch(picked, { mainTag: tag });
+            paintBody();
+            syncHead();
+            syncTagBtn();
+          },
+          null,
+        );
+      });
+
+      syncBatch();
+    };
+
+    // 未展开时也要有个空实现，供条目勾选回调调用
+    let syncBatch = (): void => {};
+
+    toggle.addEventListener("click", () => {
+      if (this.expanded.has(group.key)) this.expanded.delete(group.key);
+      else this.expanded.add(group.key);
+      syncHead();
+      paintBody();
     });
 
-    syncBatch();
+    groupCheck.addEventListener("change", () => {
+      // 勾母类即勾该组全部条目
+      const checked = groupCheck.checked;
+      for (const draft of group.drafts) draft.selected = checked;
+      paintBody();
+      syncHead();
+    });
+
+    tagBtn.addEventListener("click", () => {
+      this.openTagPicker(
+        null,
+        (tag) => {
+          setGroupTag(group, tag);
+          syncHead();
+          syncTagBtn();
+          paintBody();
+        },
+        groupTagState(group).tag,
+      );
+    });
+
+    syncHead();
+    syncTagBtn();
+    paintBody();
   }
 
   private renderDraftRow(
