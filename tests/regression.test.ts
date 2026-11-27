@@ -54,6 +54,7 @@ import {
   setDraftTag,
   applyBatch,
   countUntagged,
+  sortGroups,
 } from "../src/Import/grouping";
 import CashlogPlugin from "../src/main";
 import { TagTreeModal } from "../src/TagTreeModal";
@@ -3166,4 +3167,43 @@ test("[导入] 跳过原因应合并同类项，不能把同一个原因重复�
   // 单条时不需要 ×1
   assert.equal(formatSkipSummary([{ reason: "未指定标签" }]), "未指定标签");
   assert.equal(formatSkipSummary([]), "");
+});
+test("[导入] 分组排序：账单顺序 / 金额 / 条数 / 待处理优先", () => {
+  const makeGroup = (key: string, amounts: number[], tag: string | null) => ({
+    key,
+    drafts: amounts.map((amount) => makeDraft({ record: { ...makeDraft().record, amount }, mainTag: tag })),
+    defaultTag: null,
+  });
+
+  const groups = [
+    makeGroup("小额", [5, 5], "#支出/餐饮"), // 合计 10，2 条，已设标签
+    makeGroup("大额", [100], null), // 合计 100，1 条，未设标签
+    makeGroup("中额", [40, 30, 20], "#支出/购物"), // 合计 90，3 条，已设标签
+  ];
+
+  assert.deepEqual(
+    sortGroups(groups, "bill").map((g) => g.key),
+    ["小额", "大额", "中额"],
+    "账单顺序应原样返回",
+  );
+  assert.deepEqual(
+    sortGroups(groups, "amount-desc").map((g) => g.key),
+    ["大额", "中额", "小额"],
+  );
+  assert.deepEqual(
+    sortGroups(groups, "amount-asc").map((g) => g.key),
+    ["小额", "中额", "大额"],
+  );
+  assert.deepEqual(
+    sortGroups(groups, "count-desc").map((g) => g.key),
+    ["中额", "小额", "大额"],
+  );
+  assert.deepEqual(
+    sortGroups(groups, "pending-first").map((g) => g.key),
+    ["大额", "小额", "中额"],
+    "未设标签的应排到最前",
+  );
+
+  // 不能改动传入数组的顺序
+  assert.deepEqual(groups.map((g) => g.key), ["小额", "大额", "中额"]);
 });

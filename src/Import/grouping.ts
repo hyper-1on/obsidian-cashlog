@@ -175,3 +175,47 @@ export function applyBatch(drafts: ImportDraft[], update: BatchUpdate): void {
 export function countUntagged(drafts: ImportDraft[]): number {
   return drafts.filter((d) => d.mainTag === null).length;
 }
+
+/** 分组排序方式。 */
+export type GroupSort =
+  | "bill" // 账单顺序（默认）
+  | "amount-desc" // 组内合计金额从大到小
+  | "amount-asc" // 组内合计金额从小到大
+  | "count-desc" // 条数从多到少
+  | "name" // 名称
+  | "pending-first"; // 未处理完的排前面
+
+/** 组内金额合计（绝对值）。 */
+export function groupTotal(group: ImportGroup): number {
+  return Math.round(group.drafts.reduce((sum, d) => sum + d.record.amount, 0) * 100) / 100;
+}
+
+/**
+ * 按指定方式排序分组。
+ * 返回新数组，不动传入的顺序 —— 调用方可能还要按账单顺序回退。
+ */
+export function sortGroups(groups: ImportGroup[], sort: GroupSort): ImportGroup[] {
+  const copy = [...groups];
+
+  switch (sort) {
+    case "bill":
+      return copy;
+    case "amount-desc":
+      return copy.sort((a, b) => groupTotal(b) - groupTotal(a));
+    case "amount-asc":
+      return copy.sort((a, b) => groupTotal(a) - groupTotal(b));
+    case "count-desc":
+      return copy.sort((a, b) => b.drafts.length - a.drafts.length);
+    case "name":
+      return copy.sort((a, b) => a.key.localeCompare(b.key, "zh-Hans-CN"));
+    case "pending-first":
+      // 组内还没统一标签的算「待处理」，排到前面；同组保持原顺序
+      return copy.sort((a, b) => {
+        const pa = groupTagState(a).kind === "uniform" ? 1 : 0;
+        const pb = groupTagState(b).kind === "uniform" ? 1 : 0;
+        return pa - pb;
+      });
+    default:
+      return copy;
+  }
+}

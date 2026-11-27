@@ -13,13 +13,24 @@ import { createSection } from "../ui/Section";
 import { TagPickerModal, type TagPickerRoot } from "../ui/TagPicker";
 import { TagTreeModal } from "../TagTreeModal";
 import { PromptModal } from "../ui/PromptModal";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { validateTagSegment, findNode } from "../TagTree";
 import { parseImportRows } from "./index";
 import { readStatementFile, isStatementFile } from "./ImportFileReader";
 import { toDrafts, type ImportDraft } from "./draft";
 import { markDuplicates } from "./dedupe";
 import { findTransferPairs } from "./pairing";
-import { groupDrafts, groupTagState, setGroupTag, applyBatch, countUntagged, type GroupKeyFn, type ImportGroup } from "./grouping";
+import {
+  groupDrafts,
+  groupTagState,
+  setGroupTag,
+  applyBatch,
+  countUntagged,
+  sortGroups,
+  type GroupKeyFn,
+  type GroupSort,
+  type ImportGroup,
+} from "./grouping";
 import { buildLines, formatSkipSummary } from "./writer";
 import type { ImportParseResult } from "./types";
 
@@ -60,6 +71,10 @@ export class ImportModal extends Modal {
   private accountMap = new Map<string, string>();
   /** 已展开的分组键 */
   private expanded = new Set<string>();
+  /** 分组排序方式 */
+  private sort: GroupSort = "bill";
+  /** 组级勾选：批量设置大类时用 */
+  private selectedGroups = new Set<string>();
 
   private bodyEl!: HTMLElement;
 
@@ -230,12 +245,15 @@ export class ImportModal extends Modal {
         }),
       );
 
+    // 排序 + 组级批量
+    this.renderGroupToolbar();
+
     // 分组清单
     const listBody = createSection(this.bodyEl, {
       title: `${t("import.title")} · ${this.groups.length} 组`,
     });
 
-    for (const group of this.groups) {
+    for (const group of sortGroups(this.groups, this.sort)) {
       this.renderGroup(listBody, group);
     }
 
@@ -246,6 +264,60 @@ export class ImportModal extends Modal {
     this.renderFooter();
   }
 
+  /** 排序下拉 + 组级批量操作 */
+  private renderGroupToolbar(): void {
+    const toolbar = createSection(this.bodyEl, {});
+
+    new Setting(toolbar)
+      .setName(t("import.sort"))
+      .setDesc(t("import.sortDesc"))
+      .addDropdown((dd) => {
+        dd.addOption("bill", t("import.sort.bill"));
+        dd.addOption("pending-first", t("import.sort.pending"));
+        dd.addOption("amount-desc", t("import.sort.amountDesc"));
+        dd.addOption("amount-asc", t("import.sort.amountAsc"));
+        dd.addOption("count-desc", t("import.sort.countDesc"));
+        dd.addOption("name", t("import.sort.name"));
+        dd.setValue(this.sort);
+        dd.onChange((value) => {
+          this.sort = value as GroupSort;
+          // 排序不用重建整棵树也行，但重建最省心且状态都在 draft 上
+          this.refresh();
+        });
+      });
+
+    const bar = toolbar.createDiv({ cls: "cashlog-import-batch cashlog-import-group-batch" });
+
+    const all = bar.createEl("input", { attr: { type: "checkbox" } });
+    all.checked = this.groups.length > 0 && this.selectedGroups.size === this.groups.length;
+    all.addEventListener("change", () => {
+      if (all.checked) {
+        for (const group of this.groups) this.selectedGroups.add(group.key);
+      } else {
+        this.selectedGroups.clear();
+      }
+      this.refresh();
+    });
+
+    const label = bar.createSpan({ cls: "cashlog-import-batch-label" });
+    const count = this.selectedGroups.size;
+    label.setText(`已选 ${count} 组 / 共 ${this.groups.length} 组`);
+
+    const applyBtn = bar.createSpan({ cls: "cashlog-import-batch-apply" });
+    applyBtn.setText(tp("import.batchGroupTag", { count }));
+    applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
+    applyBtn.addEventListener("click", () => {
+      const picked = this.groups.filter((g) => this.selectedGroups.has(g.key));
+      if (picked.length === 0) return;
+      // 与子条目批量同一套选择器：可以只到大类，也可以选到细分
+      this.openTagPicker(null, (tag) => {
+        if (tag === null) return;
+        for (const group of picked) setGroupTag(group, tag);
+        this.refresh();
+      }, null);
+    });
+  }
+
   private renderGroup(container: HTMLElement, group: ImportGroup): void {
     const state = groupTagState(group);
     const total = group.drafts.reduce((s, d) => s + d.record.amount, 0);
@@ -253,6 +325,15 @@ export class ImportModal extends Modal {
 
     const row = container.createDiv({ cls: "cashlog-import-group" });
     const head = row.createDiv({ cls: "cashlog-import-group-head" });
+
+    const groupCheck = head.createEl("input", { attr: { type: "checkbox" } });
+    groupCheck.className = "cashlog-import-group-check";
+    groupCheck.checked = this.selectedGroups.has(group.key);
+    groupCheck.addEventListener("change", () => {
+      if (groupCheck.checked) this.selectedGroups.add(group.key);
+      else this.selectedGroups.delete(group.key);
+      this.refresh();
+    });
 
     const toggle = head.createSpan({
       cls: "cashlog-import-group-toggle",
@@ -386,8 +467,15 @@ export class ImportModal extends Modal {
     const accounts = this.plugin.settings.accounts ?? [];
 
     for (const [channel] of this.accountMap) {
+      // 渠道名可能很长（"招商银行储蓄卡(1234)"），独占一行并允许换行，
+      // 否则会被 .setting-item-name 的省略号截掉，看不出是哪个账户。
+      const affected = this.drafts.filter((d) => (d.record.payMethod ?? "").trim() === channel);
+      const total = Math.round(affected.reduce((sum, d) => sum + d.record.amount, 0) * 100) / 100;
+
       new Setting(body)
         .setName(channel)
+        .setDesc(`${affected.length} 条 · ${total}`)
+        .setClass("cashlog-import-account")
         .addDropdown((dd) => {
           dd.addOption("", "—");
           for (const acc of accounts) dd.addOption(acc, acc);
@@ -541,10 +629,32 @@ export class ImportModal extends Modal {
 
   // ---------------------------------------------------------------- 写入
 
-  private async commit(): Promise<void> {
+  private async commit(discardUntagged = false): Promise<void> {
     if (this.targetPath.trim() === "") {
       new Notice(t("import.noTarget"));
       return;
+    }
+
+    // 至少要有一个大类（#支出 / #收入）。缺的不能静默丢掉，也不能静默写入，
+    // 所以先问一次：舍弃它们继续，还是回去补设。
+    if (!discardUntagged) {
+      const missing = this.drafts.filter(
+        (draft) => draft.selected && draft.entryType !== null && draft.mainTag === null,
+      );
+      if (missing.length > 0) {
+        new ConfirmModal(this.app, {
+          title: t("import.noCategory.title"),
+          body: tp("import.noCategory.body", { count: missing.length }),
+          confirmText: t("import.noCategory.discard"),
+          cancelText: t("import.noCategory.back"),
+          onConfirm: () => {
+            // 舍弃这些条目后再走一遍，这次不再询问
+            for (const draft of missing) draft.selected = false;
+            void this.commit(true);
+          },
+        }).open();
+        return;
+      }
     }
 
     const { lines, skipped } = buildLines(this.drafts);

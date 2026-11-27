@@ -2550,3 +2550,30 @@ body.theme-dark .cashlog-settings-content {
 .cashlog-prompt-setting .setting-item-control input {
   width: 100%;
 }
+/* 组行勾选框（与条目级勾选独立） */
+.cashlog-import-group-check {
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* 组级批量栏：排序下拉下方一条，与条目批量栏同款 */
+.cashlog-import-group-batch {
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 4px;
+}
+
+/* 账户映射：渠道名可能很长，允许换行而不是省略号截断 */
+.cashlog-import-account .setting-item-name {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* 二选一确认弹窗正文 */
+.cashlog-confirm-body {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  color: var(--text-normal);
+}

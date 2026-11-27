@@ -528,5 +528,18 @@
   "import.picker.newOption": "＋ 新建标签…",
   "import.account.newTitle": "新建账户",
   "import.account.newPlaceholder": "账户名称",
-  "import.account.emptyName": "账户名不能为空"
+  "import.account.emptyName": "账户名不能为空",
+  "import.sort": "排序",
+  "import.sortDesc": "只影响分组的显示顺序，不影响写入内容",
+  "import.sort.bill": "账单顺序",
+  "import.sort.pending": "待处理优先",
+  "import.sort.amountDesc": "金额从大到小",
+  "import.sort.amountAsc": "金额从小到大",
+  "import.sort.countDesc": "条数从多到少",
+  "import.sort.name": "名称",
+  "import.batchGroupTag": "给这 {count} 组设标签",
+  "import.noCategory.title": "有条目缺少大类",
+  "import.noCategory.body": "{count} 条没有设置大类（支出 / 收入），无法写入笔记。",
+  "import.noCategory.discard": "舍弃这些条目",
+  "import.noCategory.back": "返回补设"
 }

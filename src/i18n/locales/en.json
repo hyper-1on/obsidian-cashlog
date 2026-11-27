@@ -528,5 +528,18 @@
   "import.picker.newOption": "+ New tag…",
   "import.account.newTitle": "New account",
   "import.account.newPlaceholder": "Account name",
-  "import.account.emptyName": "Account name cannot be empty"
+  "import.account.emptyName": "Account name cannot be empty",
+  "import.sort": "Sort",
+  "import.sortDesc": "Affects display order only, not what gets written",
+  "import.sort.bill": "Statement order",
+  "import.sort.pending": "Unfinished first",
+  "import.sort.amountDesc": "Amount, high to low",
+  "import.sort.amountAsc": "Amount, low to high",
+  "import.sort.countDesc": "Most rows first",
+  "import.sort.name": "Name",
+  "import.batchGroupTag": "Tag these {count} groups",
+  "import.noCategory.title": "Some rows have no category",
+  "import.noCategory.body": "{count} rows have no category (expense / income) and cannot be written.",
+  "import.noCategory.discard": "Discard these rows",
+  "import.noCategory.back": "Go back and set them"
 }
