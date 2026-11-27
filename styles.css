@@ -2577,3 +2577,45 @@ body.theme-dark .cashlog-settings-content {
   line-height: 1.6;
   color: var(--text-normal);
 }
+/* 导入弹窗与标签选择器同样需要「顶部起算」：
+   Modal 默认垂直居中，展开一个分组、或级联选择器多出一级时整体会上下跳。
+   固定顶部后，高度变化只影响下边缘。 */
+.modal:has(.cashlog-import-modal) {
+  align-self: flex-start;
+  margin-top: 8vh;
+  max-height: 84vh;
+}
+
+.modal:has(.cashlog-tag-picker-modal) {
+  align-self: flex-start;
+  margin-top: 8vh;
+  max-height: 84vh;
+}
+
+.modal:has(.cashlog-confirm-modal),
+.modal:has(.cashlog-prompt-modal) {
+  align-self: center;
+}
+
+/* 导入清单自身滚动，避免整页跟着内容长度走 */
+.cashlog-import-modal {
+  max-height: 76vh;
+  overflow-y: auto;
+}
+
+/* 长描述默认单行省略，点击展开；悬停可看全文（title 属性兜底） */
+.cashlog-import-draft-desc {
+  cursor: default;
+}
+
+.cashlog-import-draft-desc.is-expanded {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+/* 未设标签的行：左侧色条提示「这条导入时会被拦下」 */
+.cashlog-import-draft-untagged {
+  border-left: 2px solid var(--text-warning, #d19a00);
+  padding-left: 22px;
+}

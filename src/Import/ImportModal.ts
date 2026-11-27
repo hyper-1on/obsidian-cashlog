@@ -414,6 +414,9 @@ export class ImportModal extends Modal {
     onSelectedChange?: () => void,
   ): void {
     const row = container.createDiv({ cls: "cashlog-import-draft" });
+    // 没设标签的行用左侧色条标出来：展开后默认是勾选状态，
+    // 不区分的话看不出哪些还没处理、会在导入时被拦下。
+    if (draft.mainTag === null) row.addClass("cashlog-import-draft-untagged");
 
     const checkbox = row.createEl("input", { attr: { type: "checkbox" } });
     checkbox.checked = draft.selected;
@@ -431,7 +434,17 @@ export class ImportModal extends Modal {
       cls: "cashlog-import-draft-amount",
       text: (draft.entryType === "income" ? "+" : "-") + draft.record.amount.toFixed(2),
     });
-    row.createSpan({ cls: "cashlog-import-draft-desc", text: draft.description });
+    // 描述可能很长（微信的商品名、转账附言），默认单行省略。
+    // title 提供悬停全文，点击可以就地展开/收起。
+    const descEl = row.createSpan({
+      cls: "cashlog-import-draft-desc",
+      text: draft.description,
+    });
+    descEl.setAttribute("title", draft.description);
+    descEl.addEventListener("click", () => {
+      const expanded = descEl.hasClass("is-expanded");
+      descEl.toggleClass("is-expanded", !expanded);
+    });
 
     const tagBtn = row.createSpan({
       cls: "cashlog-import-tag-btn",
