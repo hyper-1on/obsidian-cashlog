@@ -545,5 +545,6 @@
   "import.partial": "部分",
   "import.partialHint": "只选中了部分条目",
   "import.selectedCount": "已选 {count} 条（跨 {groups} 组）",
-  "import.clearSelection": "全部取消"
+  "import.clearSelection": "全部取消",
+  "import.selectAll": "全选"
 }

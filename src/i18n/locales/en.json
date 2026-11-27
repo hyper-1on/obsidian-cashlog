@@ -545,5 +545,6 @@
   "import.partial": "partial",
   "import.partialHint": "Only some rows are ticked",
   "import.selectedCount": "{count} rows selected (across {groups} groups)",
-  "import.clearSelection": "Clear all"
+  "import.clearSelection": "Clear all",
+  "import.selectAll": "Select all"
 }

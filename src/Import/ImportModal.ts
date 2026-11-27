@@ -307,15 +307,26 @@ export class ImportModal extends Modal {
 
     const picked = this.drafts.filter((d) => d.selected);
     const groupCount = this.groups.filter((g) => g.drafts.some((d) => d.selected)).length;
+    const allPicked = this.drafts.length > 0 && picked.length === this.drafts.length;
 
     bar.createSpan({
-      cls: "cashlog-import-batch-label",
+      cls: "cashlog-import-selection-count",
       text: tp("import.selectedCount", { count: picked.length, groups: groupCount }),
+    });
+
+    // 全选 / 全部取消：底栏是唯一的跨组入口
+    const toggleAll = bar.createSpan({ cls: "cashlog-import-selection-action" });
+    toggleAll.setText(allPicked ? t("import.clearSelection") : t("import.selectAll"));
+    toggleAll.addEventListener("click", () => {
+      const target = !allPicked;
+      for (const draft of this.drafts) draft.selected = target;
+      this.syncAllGroups();
+      this.updateSelectionBar();
     });
 
     if (picked.length === 0) return;
 
-    const applyBtn = bar.createSpan({ cls: "cashlog-import-batch-apply" });
+    const applyBtn = bar.createSpan({ cls: "cashlog-import-selection-action" });
     applyBtn.setText(tp("import.batchApply", { count: picked.length }));
     applyBtn.addEventListener("click", () => {
       // 点击时重新过滤，保证作用于「此刻」的选中项
@@ -331,14 +342,6 @@ export class ImportModal extends Modal {
         },
         null,
       );
-    });
-
-    const clearBtn = bar.createSpan({ cls: "cashlog-import-batch-clear" });
-    clearBtn.setText(t("import.clearSelection"));
-    clearBtn.addEventListener("click", () => {
-      for (const draft of this.drafts) draft.selected = false;
-      this.syncAllGroups();
-      this.updateSelectionBar();
     });
   }
 
@@ -379,39 +382,6 @@ export class ImportModal extends Modal {
         });
       });
 
-    const bar = toolbar.createDiv({ cls: "cashlog-import-batch cashlog-import-group-batch" });
-
-    const all = bar.createEl("input", { attr: { type: "checkbox" } });
-    const count = this.groups.filter((group) => this.isGroupSelected(group)).length;
-    all.checked = this.groups.length > 0 && count === this.groups.length;
-    all.indeterminate = count > 0 && count < this.groups.length;
-    all.addEventListener("change", () => {
-      // 全选/全不选直接作用到条目上，组的状态由条目推导；
-      // 只刷新各组，不重建清单
-      const checked = all.checked;
-      for (const group of this.groups) {
-        for (const draft of group.drafts) draft.selected = checked;
-      }
-      this.syncAllGroups();
-      this.updateSelectionBar();
-    });
-
-    const label = bar.createSpan({ cls: "cashlog-import-batch-label" });
-    label.setText(`已选 ${count} 组 / 共 ${this.groups.length} 组`);
-
-    const applyBtn = bar.createSpan({ cls: "cashlog-import-batch-apply" });
-    applyBtn.setText(tp("import.batchGroupTag", { count }));
-    applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
-    applyBtn.addEventListener("click", () => {
-      const picked = this.groups.filter((g) => this.isGroupSelected(g));
-      if (picked.length === 0) return;
-      // 与子条目批量同一套选择器：可以只到大类，也可以选到细分
-      this.openTagPicker(null, (tag) => {
-        if (tag === null) return;
-        for (const group of picked) setGroupTag(group, tag);
-        this.refresh();
-      }, null);
-    });
   }
 
   private renderGroup(container: HTMLElement, group: ImportGroup): void {
@@ -494,6 +464,8 @@ export class ImportModal extends Modal {
       for (const draft of group.drafts) draft.selected = checked;
       paintBody();
       syncHead();
+      // 必须同步底栏，否则勾了母类底栏仍显示 0
+      this.updateSelectionBar();
     });
 
     tagBtn.addEventListener("click", () => {
@@ -658,12 +630,14 @@ export class ImportModal extends Modal {
   }
 
   private renderFooter(): void {
-    // 跨组的统一选中集：勾选是全局状态，操作入口也只有一个，
-    // 放在列表底部并固定住，不随滚动消失。
-    this.selectionBar = this.bodyEl.createDiv({ cls: "cashlog-import-selection-bar" });
+    // 选中栏与「取消 / 导入」一起吸底。
+    // 分开吸的话，选中栏会盖住下面的按钮。
+    const bottom = this.bodyEl.createDiv({ cls: "cashlog-import-bottom" });
+
+    this.selectionBar = bottom.createDiv({ cls: "cashlog-import-selection-bar" });
     this.updateSelectionBar();
 
-    const footer = this.bodyEl.createDiv({ cls: "cashlog-import-footer" });
+    const footer = bottom.createDiv({ cls: "cashlog-import-footer" });
 
     const untagged = countUntagged(this.drafts.filter((d) => d.selected));
     if (untagged > 0) {
