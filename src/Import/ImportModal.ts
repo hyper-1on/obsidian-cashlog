@@ -661,7 +661,8 @@ export class ImportModal extends Modal {
     const commit = footer.createEl("button", {
       text: t("import.commit"),
     });
-    commit.className = "cashlog-settings-btn cashlog-settings-btn-primary";
+    // 用 Obsidian 原生的主按钮样式，颜色跟着主题的 accent 走
+    commit.className = "cashlog-settings-btn mod-cta";
     commit.addEventListener("click", () => {
       void this.commit();
     });
