@@ -2466,7 +2466,7 @@ body.theme-dark .cashlog-settings-content {
   justify-content: flex-end;
   gap: 10px;
   /* 与上面的选中栏属于同一块底栏，不再画第二条分割线 */
-  padding: 4px 4px 10px;
+  padding: 4px 0 10px;
 }
 
 .cashlog-import-warn {
@@ -2631,7 +2631,7 @@ body.theme-dark .cashlog-settings-content {
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  padding: 0 4px;
+  padding: 0;
   margin-top: 8px;
   font-size: 13px;
   background: var(--background-secondary);
@@ -2658,13 +2658,11 @@ body.theme-dark .cashlog-settings-content {
   margin-top: 12px;
   padding-top: 2px;
   background: var(--background-secondary);
-  /* 比列表深一档的底色在部分主题下几乎看不出，
-     所以再叠一层内阴影和一圈外投影，保证底栏是独立的一层。 */
   border-top: 1px solid var(--background-modifier-border);
-  border-radius: 10px 10px 0 0;
-  box-shadow:
-    inset 0 1px 0 var(--background-modifier-border),
-    0 -6px 18px rgba(0, 0, 0, 0.14);
+  /* 上方贴合列表，不做圆角；下方两角收圆，作为整块底栏的下沿 */
+  border-radius: 0 0 10px 10px;
+  /* 沿用上一版的阴影强度 */
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* 容器已经负责吸底与分割，栏本身不再重复画 */
