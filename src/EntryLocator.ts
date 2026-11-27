@@ -1,3 +1,5 @@
+import type { CashlogEntry } from "./CashlogEntry";
+
 // 在最新文件内容中定位某个记账条目所在的行号。
 //
 // 缓存里的 lineNumber 是索引时刻的快照：外部编辑器、同步工具或插件外部的
