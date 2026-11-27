@@ -302,3 +302,21 @@
 - **涉及文件**：`src/Import/ImportModal.ts`、`src/Import/grouping.ts`、`src/Import/writer.ts`、
   `styles.css`、两个语言包
 - **影响**：仅界面与交互；不改变导入的写入逻辑与产出格式
+
+## [2026-11-28] 发布流程改为手动触发，并补一处类型导入
+
+- **类型**：工程 + 修复
+- **动机**：
+  - `release.yml` 原为「推送任意 tag」触发，会执行 `npm install`；而
+    `package-lock.json` 里有一条 `git+ssh` 传递依赖（`eslint-plugin`，
+    由 `obsidian-dev-utils` 带入），CI 上没有对应的 SSH 凭据，这一步必然失败，
+    推 tag 只会留下失败记录
+  - `src/EntryLocator.ts` 的 `resolveEntryLineForEntry` 使用了 `CashlogEntry`
+    却没有导入，类型检查报 TS2304
+- **改动**：
+  - `release.yml` 触发条件改为 `workflow_dispatch`，并写明恢复自动发布的前提
+  - 补 `import type { CashlogEntry } from "./CashlogEntry"`
+- **涉及文件**：`.github/workflows/release.yml`、`src/EntryLocator.ts`
+- **影响**：
+  - 推送 tag 不再自动创建 release，发布改为手动执行
+  - 新增的导入只作用于类型层，不改变构建产物
