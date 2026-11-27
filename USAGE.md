@@ -60,7 +60,7 @@
 
 **Step 1: Record an Entry**
 
-Press `Ctrl+P` to open the command palette, search for `Create or edit cashlog`, and press Enter. In the dialog that appears, fill in:
+Press `Ctrl+P` to open the command palette, search for `Create or edit`, and press Enter. In the dialog that appears, fill in:
 
 1. Type: Select "Expense" or "Income"
 2. Tag: Select a sub-tag (e.g., "Transport")
@@ -101,7 +101,7 @@ Switch to Reading Mode to see the query results.
 ### Using Commands
 
 1. Place the cursor on any blank line in the editor
-2. `Ctrl+P` → Type `Create or edit cashlog` → Press Enter
+2. `Ctrl+P` → Type `Create or edit` → Press Enter
 3. Fill in the information in the dialog and confirm
 
 ### Manual Entry
@@ -220,7 +220,7 @@ Line charts and bar charts share the same dual-dimension grouping syntax: the X-
 
 | Directive | Description |
 |------|------|
-| `chart bar split by none` / `chart line split by none` | No grouping, show net balance (default) |
+| `chart bar split by none` / `chart line split by none` | No grouping, net balance only (**note: omitting this directive defaults to `valueType`**) |
 | `chart bar split by valueType` / `chart line split by valueType` | Split by value type (net balance / income / expense) |
 | `chart bar split by tag` / `chart line split by tag` | Split by tag; requires `chart bar items` / `chart line items` |
 | `chart bar split by account` / `chart line split by account` | Split by account; requires `chart bar items` / `chart line items` |
@@ -240,7 +240,7 @@ Line charts and bar charts share the same dual-dimension grouping syntax: the X-
 | `chart width 800` | Chart width (px, default 600) |
 | `chart height 400` | Chart height (px, default 400) |
 | `chart legend true` / `false` | Whether to show legend (default true) |
-| `chart labels true` / `false` | Whether to show data labels (default true) |
+| `chart labels true` / `false` | Whether to show data labels (**default false**) |
 
 #### Enhanced Type Filtering
 
@@ -274,6 +274,14 @@ Explanation of each part:
 | `💴-100` | `💴` + signed number | Yes | Amount marker + amount value |
 | `➕2026-04-25` | `➕` + YYYY-MM-DD | No | Date marker |
 | `⏰17:30` | `⏰` + HH:mm | No | Time marker |
+
+> **Note on default tags and accounts.**
+> The examples above use English tag names (`#expense`, `#income`) and account
+> names (`WeChat`) for readability only. Out of the box the plugin's default
+> tags and accounts are **Chinese**: `#支出` / `#收入` and accounts `微信` /
+> `支付宝` / `现金` / `银行卡`. Either rename them under Settings → Cashlog, or
+> use the names your vault actually defines — an entry whose tag does not match
+> the configured expense tag will **not** be counted as an expense.
 
 **More Examples**:
 

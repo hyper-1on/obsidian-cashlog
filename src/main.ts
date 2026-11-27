@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
 import { Events, MarkdownRenderChild, Plugin, TFile } from "obsidian";
-import { CashlogSettings, DEFAULT_SETTINGS } from "./Settings";
+import { CashlogSettings, createDefaultSettings } from "./Settings";
 import { CashlogSettingsTab } from "./SettingsTab";
 import { addCommands } from "./Commands";
 import { Cache } from "./Cache";
-import { Query } from "./Query/Query";
+import { resolveEntryLine } from "./EntryLocator";
+import { Query, withGlobalQuery } from "./Query/Query";
 import { renderQueryResult } from "./Renderer";
 import { CashlogChartRenderChild } from "./ChartRenderer";
 import { AttachmentManager } from "./AttachmentManager";
@@ -14,12 +15,16 @@ import { CashlogView, CASHLOG_VIEW_TYPE } from "./CashlogView";
 import { initI18n, tp } from "./i18n";
 
 export default class CashlogPlugin extends Plugin {
-  settings: CashlogSettings = DEFAULT_SETTINGS;
+  settings: CashlogSettings = createDefaultSettings();
   cache!: Cache;
   events = new Events();
   attachmentManager!: AttachmentManager;
   accountManager!: AccountManager;
   budgetManager!: BudgetManager;
+  // 渲染刷新防抖定时器
+  private refreshTimer: number | null = null;
+  // 设置保存防抖定时器
+  private saveTimer: number | null = null;
 
   async onload() {
     initI18n();
@@ -58,10 +63,9 @@ export default class CashlogPlugin extends Plugin {
       });
     });
 
-    // 监听缓存更新事件，触发重渲染
-    this.events.on("cashlog-cache-update", () => {
-      this.events.trigger("cashlog-render-refresh");
-    });
+    // 监听缓存更新事件，触发重渲染（带防抖：一次编辑可能触发多次 cache 更新，
+    // 每次都全量重建代码块与图表实例会造成明显卡顿）
+    this.events.on("cashlog-cache-update", () => this.scheduleRenderRefresh());
 
     // 监听文件变更以更新缓存
     this.app.workspace.onLayoutReady(async () => {
@@ -101,8 +105,33 @@ export default class CashlogPlugin extends Plugin {
     });
   }
 
+  // 合并短时间内的多次缓存更新，只触发一次重渲染：
+  // 一次编辑可能引发多份文件写入，逐次全量重建代码块与图表实例会明显卡顿。
+  private scheduleRenderRefresh(): void {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      this.events.trigger("cashlog-render-refresh");
+    }, 150);
+  }
+
+  // 文本输入框专用：连续输入时只在停顿后写一次磁盘。
+  // 直接 saveSettings() 会在每个字符上写 data.json，
+  // 全局查询、附件目录这类长文本尤其明显。
+  saveSettingsDebounced(delay = 300): void {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      this.saveTimer = null;
+      void this.saveSettings();
+    }, delay);
+  }
+
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loaded = (await this.loadData()) as Partial<CashlogSettings> | null;
+    // 用深拷贝的默认值兜底：浅拷贝会让 settings 与 DEFAULT_SETTINGS 共享数组/对象，
+    // 就地修改（例如新增账户）会永久污染默认值，使「恢复默认」失效。
+    this.settings = Object.assign(createDefaultSettings(), loaded ?? {});
+    this.cache?.updateSettings(this.settings);
   }
 
   async saveSettings() {
@@ -118,17 +147,23 @@ export default class CashlogPlugin extends Plugin {
   }
 
   // 将行替换写入对应文件（migrateTag / migrateAccount 共用）
-  private async applyLineReplacements(fileChanges: Map<string, Map<number, string>>): Promise<void> {
+  // 行号来自缓存快照，写入前必须在最新文件内容里重新定位，
+  // 否则文件被外部改动（同步、其它编辑器）后会改写到别的行上。
+  private async applyLineReplacements(
+    fileChanges: Map<string, Map<number, { original: string; newLine: string }>>,
+  ): Promise<void> {
     for (const [filePath, lineChanges] of fileChanges) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) continue;
 
       await this.app.vault.process(file, (content) => {
         const lines = content.split("\n");
-        for (const [lineNumber, newLine] of lineChanges) {
-          if (lineNumber < lines.length) {
-            lines[lineNumber] = newLine;
-          }
+        // 倒序处理，避免多条重定位之间互相影响
+        const changes = [...lineChanges.entries()].sort((a, b) => b[0] - a[0]);
+        for (const [lineNumber, change] of changes) {
+          const targetLine = resolveEntryLine(lines, change.original, lineNumber);
+          if (targetLine === null) continue;
+          lines[targetLine] = change.newLine;
         }
         return lines.join("\n");
       });
@@ -138,7 +173,7 @@ export default class CashlogPlugin extends Plugin {
   // 标签迁移：将缓存中所有旧标签替换为新标签，保留子标签
   async migrateTag(oldTag: string, newTag: string): Promise<number> {
     const entries = this.cache.getEntries();
-    const fileChanges = new Map<string, Map<number, string>>();
+    const fileChanges = new Map<string, Map<number, { original: string; newLine: string }>>();
     let migrationCount = 0;
 
     for (const entry of entries) {
@@ -167,7 +202,10 @@ export default class CashlogPlugin extends Plugin {
       if (!fileChanges.has(entry.location.path)) {
         fileChanges.set(entry.location.path, new Map());
       }
-      fileChanges.get(entry.location.path)!.set(entry.location.lineNumber, newLine);
+      fileChanges.get(entry.location.path)!.set(entry.location.lineNumber, {
+        original: entry.originalMarkdown,
+        newLine,
+      });
       migrationCount++;
     }
 
@@ -181,47 +219,54 @@ export default class CashlogPlugin extends Plugin {
   // 按标签删除所有关联的记账条目
   async deleteEntriesByTag(tag: string): Promise<number> {
     const entries = this.cache.getEntries();
-    const fileLinesToDelete = new Map<string, number[]>();
-    let count = 0;
+    const fileTargets = new Map<string, { line: number; original: string }[]>();
 
     for (const entry of entries) {
       if (!entry.location) continue;
       const hasTag = entry.tags.some((t) => t.toLowerCase() === tag.toLowerCase());
       if (!hasTag) continue;
 
-      if (!fileLinesToDelete.has(entry.location.path)) {
-        fileLinesToDelete.set(entry.location.path, []);
+      if (!fileTargets.has(entry.location.path)) {
+        fileTargets.set(entry.location.path, []);
       }
-      fileLinesToDelete.get(entry.location.path)!.push(entry.location.lineNumber);
-      count++;
+      fileTargets.get(entry.location.path)!.push({
+        line: entry.location.lineNumber,
+        original: entry.originalMarkdown,
+      });
     }
 
-    if (count === 0) return 0;
+    if (fileTargets.size === 0) return 0;
 
-    // 逐个文件删除行（按行号倒序处理避免偏移）
-    for (const [filePath, lineNumbers] of fileLinesToDelete) {
+    let deletedCount = 0;
+
+    // 逐个文件删除行；删除前重新定位，定位不到的行跳过（宁可少删，也不能删错行）
+    for (const [filePath, targets] of fileTargets) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) continue;
 
-      const sortedLines = [...lineNumbers].sort((a, b) => b - a);
-
       await this.app.vault.process(file, (content) => {
         const lines = content.split("\n");
-        for (const lineNumber of sortedLines) {
+        const resolved = targets
+          .map((target) => resolveEntryLine(lines, target.original, target.line))
+          .filter((line): line is number => line !== null);
+        // 倒序删除，避免行号偏移
+        resolved.sort((a, b) => b - a);
+        for (const lineNumber of resolved) {
           lines.splice(lineNumber, 1);
         }
+        deletedCount += resolved.length;
         return lines.join("\n");
       });
     }
 
     await this.cache.reindex();
-    return count;
+    return deletedCount;
   }
 
   // 账户迁移：将缓存中所有旧账户名替换为新账户名
   async migrateAccount(oldName: string, newName: string): Promise<number> {
     const entries = this.cache.getEntries();
-    const fileChanges = new Map<string, Map<number, string>>();
+    const fileChanges = new Map<string, Map<number, { original: string; newLine: string }>>();
     let count = 0;
 
     for (const entry of entries) {
@@ -240,7 +285,10 @@ export default class CashlogPlugin extends Plugin {
       if (!fileChanges.has(entry.location.path)) {
         fileChanges.set(entry.location.path, new Map());
       }
-      fileChanges.get(entry.location.path)!.set(entry.location.lineNumber, newLine);
+      fileChanges.get(entry.location.path)!.set(entry.location.lineNumber, {
+        original: entry.originalMarkdown,
+        newLine: newLine,
+      });
       count++;
     }
 
@@ -280,7 +328,9 @@ class CashlogRenderChild extends MarkdownRenderChild {
   }
 
   onload() {
-    this.render();
+    // 等索引就绪再首次渲染，避免首屏读到空缓存而短暂显示「暂无数据」。
+    // 索引完成后会触发 cache-update → render-refresh，届时还会再刷新一次。
+    void this.plugin.cache.whenReady().then(() => this.render());
     this.registerEvent(
       this.plugin.events.on("cashlog-render-refresh", () => {
         this.render();
@@ -289,7 +339,10 @@ class CashlogRenderChild extends MarkdownRenderChild {
   }
 
   private render() {
-    const query = new Query(this.source, this.plugin.settings);
+    const query = new Query(
+      withGlobalQuery(this.source, this.plugin.settings.globalQuery),
+      this.plugin.settings,
+    );
     const error = query.getError();
 
     if (error) {

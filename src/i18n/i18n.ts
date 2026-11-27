@@ -57,6 +57,11 @@ export function getLocale(): string {
   return currentLocale;
 }
 
+// 当前语言使用的货币符号
+export function getCurrencySymbol(): string {
+  return currentLocale === "en" ? "$" : "¥";
+}
+
 // 格式化金额（根据当前语言环境）
 export function formatMoney(value: number): string {
   const abs = Math.abs(value);
@@ -64,7 +69,7 @@ export function formatMoney(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const currency = currentLocale === "en" ? "$" : "¥";
+  const currency = getCurrencySymbol();
   return value < 0 ? `-${currency}${formatted}` : `${currency}${formatted}`;
 }
 

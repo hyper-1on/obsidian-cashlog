@@ -3,6 +3,7 @@ import { CashlogEntry } from "../EntryLocation";
 import { FilterFunction, FilterOrError } from "./Filter";
 import type { CashlogSettings } from "../Settings";
 import { checkPathFilterConflict } from "../PathUtils";
+import { tp } from "../i18n";
 import { DateParser } from "./DateParser";
 import { DateRange } from "./DateRange";
 
@@ -115,7 +116,7 @@ export function parseFilter(
     }
 
     if (!fieldDates.isValid()) {
-      return { error: `无法解析日期: ${line}` };
+      return { error: tp("error.dateParseFailed", { line }) };
     }
 
     // 根据操作符构建过滤函数
@@ -135,6 +136,19 @@ export function parseFilter(
     return { filter: (e) => e.location !== null && paths.some((p) => e.location!.path.toLowerCase().includes(p)) };
   }
 
+  // account is not <name>
+  // 必须放在 account is 之前：否则 "not 微信" 会被当作账户名整体匹配，导致查询恒为空
+  const accountNotMatch = line.match(/^account\s+is\s+not\s+(.+)/i);
+  if (accountNotMatch) {
+    const names = splitByOr(accountNotMatch[1]).map((n) => n.toLowerCase());
+    return {
+      filter: (e) => {
+        const acct = e.accountAmounts.map((aa) => aa.account.toLowerCase());
+        return names.every((n) => !acct.some((a) => a.includes(n)));
+      },
+    };
+  }
+
   // account is <name>
   const accountIsMatch = line.match(/^account\s+is\s+(.+)/i);
   if (accountIsMatch) {
@@ -143,18 +157,6 @@ export function parseFilter(
       filter: (e) => {
         const acct = e.accountAmounts.map((aa) => aa.account.toLowerCase());
         return names.some((n) => acct.some((a) => a.includes(n)));
-      },
-    };
-  }
-
-  // account is not <name>
-  const accountNotMatch = line.match(/^account\s+is not\s+(.+)/i);
-  if (accountNotMatch) {
-    const names = splitByOr(accountNotMatch[1]).map((n) => n.toLowerCase());
-    return {
-      filter: (e) => {
-        const acct = e.accountAmounts.map((aa) => aa.account.toLowerCase());
-        return names.every((n) => !acct.some((a) => a.includes(n)));
       },
     };
   }

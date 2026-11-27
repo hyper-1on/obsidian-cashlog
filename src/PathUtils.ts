@@ -67,26 +67,32 @@ export function isPathAllowed(
   return true;
 }
 
+// 两个路径是否可能指向同一批文件（任一方是另一方的子串即可）
+function pathsOverlap(a: string, b: string): boolean {
+  return a.length > 0 && b.length > 0 && (a.includes(b) || b.includes(a));
+}
+
 // 检查查询路径过滤器是否与排除/包含设置冲突
+// 判定语义与 isPathAllowed 保持一致（均为子串包含），避免对合法查询误报
 export function checkPathFilterConflict(
   queryPath: string,
   excludePaths: string[],
   includePaths: string[],
 ): string | null {
-  const lowerQuery = queryPath.toLowerCase();
+  const lowerQuery = queryPath.toLowerCase().trim();
 
   if (excludePaths.length > 0) {
     for (const excluded of excludePaths) {
-      if (excluded.trim().toLowerCase() === lowerQuery) {
+      const lowerExcluded = excluded.trim().toLowerCase();
+      // 查询范围落在被排除范围之内时，结果必然为空
+      if (lowerExcluded && lowerQuery.includes(lowerExcluded)) {
         return tp("error.pathExcluded", { path: queryPath });
       }
     }
   }
 
   if (includePaths.length > 0) {
-    const isInIncludes = includePaths.some(
-      (p) => p.trim().toLowerCase() === lowerQuery,
-    );
+    const isInIncludes = includePaths.some((p) => pathsOverlap(lowerQuery, p.trim().toLowerCase()));
     if (!isInIncludes) {
       return tp("error.pathNotIncluded", { path: queryPath });
     }

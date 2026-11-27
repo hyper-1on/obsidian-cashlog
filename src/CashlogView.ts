@@ -1,19 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import type CashlogPlugin from "./main";
-import { renderDashboard, DashboardCallbacks } from "./DashboardRenderer";
-import { renderPanelSettings } from "./PanelSettings";
+import { renderDashboard, hideTooltip, DashboardCallbacks } from "./DashboardRenderer";
+import { renderPanelSettings, setPanelHideAmounts } from "./PanelSettings";
 import { renderQueryResult } from "./Renderer";
-import { Query } from "./Query/Query";
+import { Query, PANEL_PIE_COLORS } from "./Query/Query";
 import { QueryResult, EntryGroup } from "./Query/Filter";
 import { CashlogEntry } from "./EntryLocation";
 import {
   transformToChartData,
   renderPieChart,
+  clearLabelColorCache,
 } from "./ChartRenderer";
 import type { ChartDataResult } from "./ChartRenderer";
 import type { ChartConfig } from "./Query/Query";
-import { t, tp, formatMoneyUnsigned } from "./i18n";
+import { t, tp, formatMoney } from "./i18n";
 import { round2 } from "./MoneyUtils";
 
 export const CASHLOG_VIEW_TYPE = "cashlog-panel";
@@ -33,6 +34,8 @@ export class CashlogView extends ItemView {
     initialBalance?: number;
   } | null = null;
   private hideAmounts: boolean = true;
+  // 面板饼图实例：重建内容前必须销毁，否则会泄漏 Chart 实例与 ResizeObserver
+  private pieChart: { destroy(): void } | null = null;
   private panelContentEl: HTMLElement;
   private tabBarEl: HTMLElement;
 
@@ -77,7 +80,27 @@ export class CashlogView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    // 清理
+    this.destroyPieChart();
+    // tooltip 挂在 document.body 上，视图关闭时必须显式清理，否则会悬挂在页面上
+    hideTooltip();
+    // 面板关闭期间主题可能变化，丢弃缓存的标签颜色
+    clearLabelColorCache();
+  }
+
+  // 饼图实例必须显式销毁：清空容器只会移除 canvas，
+  // Chart 实例与它的 ResizeObserver 会一直留在内存里。
+  private destroyPieChart(): void {
+    this.pieChart?.destroy();
+    this.pieChart = null;
+  }
+
+  // 统一的内容重建入口：先销毁图表、清理 body 上的 tooltip，再清空容器
+  private clearPanelContent(): void {
+    this.destroyPieChart();
+    // 重建时 tooltip 的触发元素会被 empty() 移除，此后 mouseleave 不再触发；
+    // 若不显式清理，tooltip 会一直悬挂在页面上直到下次触发
+    hideTooltip();
+    this.panelContentEl.empty();
   }
 
   private renderTabBar(): void {
@@ -101,7 +124,10 @@ export class CashlogView extends ItemView {
     this.subPage = null;
     this.renderTabBar();
 
-    this.panelContentEl.empty();
+    // 设置页里的金额展示也要跟随隐私开关
+    setPanelHideAmounts(this.hideAmounts);
+
+    this.clearPanelContent();
 
     if (tab === "dashboard") {
       const callbacks: DashboardCallbacks = {
@@ -116,14 +142,18 @@ export class CashlogView extends ItemView {
 
   private toggleHideAmounts(): void {
     this.hideAmounts = !this.hideAmounts;
-    if (this.activeTab === "dashboard" && !this.subPage) {
-      this.panelContentEl.empty();
-      const callbacks: DashboardCallbacks = {
-        showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
-        showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
-      };
-      renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
+    if (this.activeTab !== "dashboard") return;
+    if (this.subPage) {
+      // 子页面也提供切换按钮，切换后重渲染当前子页面即可
+      this.renderSubPage();
+      return;
     }
+    this.clearPanelContent();
+    const callbacks: DashboardCallbacks = {
+      showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
+      showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
+    };
+    renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
   }
 
   refresh(): void {
@@ -132,14 +162,19 @@ export class CashlogView extends ItemView {
       this.subPage = null;
     }
     if (this.activeTab === "dashboard") {
-      this.panelContentEl.empty();
+      this.clearPanelContent();
       const callbacks: DashboardCallbacks = {
         showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
         showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
       };
       renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
     } else if (this.activeTab === "settings") {
-      this.panelContentEl.empty();
+      // 不要调用 clearPanelContent()：它会 empty() 容器，使 scrollTop 立刻归 0，
+      // 随后 renderPanelSettings 读到的滚动位置已是 0、只能恢复成 0，
+      // 于是每次刷新（删除账户/子标签、切换功能开关）面板都会跳回顶部。
+      // renderPanelSettings 自己负责清空与按比例恢复，这里只补它不管的清理职责。
+      this.destroyPieChart();
+      hideTooltip();
       renderPanelSettings(this.panelContentEl, this.plugin);
     }
   }
@@ -164,25 +199,35 @@ export class CashlogView extends ItemView {
       showEntries: (entries, title, extra) => this.showEntryList(entries, title, extra),
       showPieChart: (entries, expenseTag) => this.showPieChart(entries, expenseTag),
     };
-    this.panelContentEl.empty();
+    this.clearPanelContent();
     renderDashboard(this.panelContentEl, this.plugin, callbacks, this.hideAmounts, () => this.toggleHideAmounts());
   }
 
   // 渲染返回按钮
-  private renderBackButton(): void {
-    const backBtn = this.panelContentEl.createEl("button", {
-      cls: "cashlog-back-btn",
-    });
+  // 子页面头部：返回按钮 + 金额隐藏开关。
+  // 眼睛按钮原本只渲染在主页面的统计周期标签里（DashboardRenderer.renderPeriodLabel），
+  // 子页面走的是另一条渲染链，因此需要在这里单独提供，否则子页面无法切换明/隐金额。
+  private renderSubPageHeader(): void {
+    const header = this.panelContentEl.createDiv({ cls: "cashlog-subpage-header" });
+
+    const backBtn = header.createEl("button", { cls: "cashlog-back-btn" });
     backBtn.textContent = t("view.backToDashboard");
     backBtn.addEventListener("click", () => this.goBack());
+
+    const toggle = header.createEl("button", { cls: "cashlog-subpage-toggle" });
+    setIcon(toggle, this.hideAmounts ? "eye-off" : "eye");
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleHideAmounts();
+    });
   }
 
   // 渲染子页面内容
   private renderSubPage(): void {
     if (!this.subPage) return;
 
-    this.panelContentEl.empty();
-    this.renderBackButton();
+    this.clearPanelContent();
+    this.renderSubPageHeader();
 
     // 子页面标题
     this.panelContentEl.createDiv({
@@ -232,7 +277,7 @@ export class CashlogView extends ItemView {
     };
 
     const listContainer = this.panelContentEl.createDiv();
-    renderQueryResult(listContainer, result, query, this.plugin);
+    renderQueryResult(listContainer, result, query, this.plugin, this.hideAmounts);
   }
 
   // 账户明细页面：展示初始余额 + 收支/转账/调账分类汇总 + 当前余额 + 条目列表
@@ -293,7 +338,7 @@ export class CashlogView extends ItemView {
       const sign = r.value >= 0 ? "" : "-";
       row.createSpan({
         cls: `cashlog-account-detail-value ${valCls}`,
-        text: `${sign}¥${formatMoneyUnsigned(Math.abs(r.value))}`,
+        text: `${sign}${this.hideAmounts ? "***" : formatMoney(Math.abs(r.value))}`,
       });
     }
 
@@ -305,7 +350,7 @@ export class CashlogView extends ItemView {
     const totalSign = currentBalance >= 0 ? "" : "-";
     totalRow.createSpan({
       cls: `cashlog-account-detail-value ${totalCls}`,
-      text: `${totalSign}¥${formatMoneyUnsigned(Math.abs(currentBalance))}`,
+      text: `${totalSign}${this.hideAmounts ? "***" : formatMoney(Math.abs(currentBalance))}`,
     });
 
     // === 条目列表（使用原有样式） ===
@@ -328,7 +373,7 @@ export class CashlogView extends ItemView {
     };
 
     const listContainer = this.panelContentEl.createDiv();
-    renderQueryResult(listContainer, listResult, listQuery, this.plugin);
+    renderQueryResult(listContainer, listResult, listQuery, this.plugin, this.hideAmounts);
   }
 
   // 渲染扇形图子页面
@@ -358,13 +403,8 @@ export class CashlogView extends ItemView {
       summary: { totalIncome: 0, totalExpense: 0, balance: 0, count: expenseEntries.length },
     };
 
-    // 饼图默认颜色
-    const defaultColors = [
-      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
-      "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
-      "#14b8a6", "#e11d48", "#a855f7", "#eab308", "#0ea5e9",
-      "#d946ef", "#22c55e", "#fb923c", "#64748b", "#7c3aed",
-    ];
+    // 饼图调色板（与图表共用定义，见 Query.ts 的 PANEL_PIE_COLORS）
+    const defaultColors = PANEL_PIE_COLORS;
 
     const chartData: ChartDataResult = transformToChartData(
       result,
@@ -389,7 +429,7 @@ export class CashlogView extends ItemView {
 
     // 创建子容器避免 createChartContainer 清空返回按钮和标题
     const chartContainer = this.panelContentEl.createDiv();
-    renderPieChart(chartContainer, chartData, chartConfig);
+    this.pieChart = renderPieChart(chartContainer, chartData, chartConfig, this.hideAmounts);
   }
 }
 

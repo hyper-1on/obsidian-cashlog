@@ -6,12 +6,40 @@ import type CashlogPlugin from "./main";
 import { AccountManager } from "./AccountManager";
 import type { EntryLocation } from "./EntryLocation";
 import { round2 } from "./MoneyUtils";
+import { t } from "./i18n";
 
 // 构建上下文：indentation、listMarker、location 可能来自新条目的行上下文，也可能来自原条目
 export interface EntryBuildContext {
   indentation: string;
   listMarker: string;
   location: EntryLocation | null;
+}
+
+// 校验弹窗数据，返回错误信息；null 表示可以提交。
+// 存在意义：无金额且无账户金额的条目在严格解析下不会被识别为记账条目，
+// 若放任写回，用户会看到「显示记账成功、查询却查不到」的假象。
+export function validateEntryData(data: EditableEntryData): string | null {
+  const num = (value: string): number => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  if (data.tagType === "transfer") {
+    const outTotal = data.fromAccounts.reduce((sum, a) => sum + num(a.amount), 0);
+    if (outTotal <= 0) return t("validation.transferOutRequired");
+    const inTotal = data.toAccounts.reduce((sum, a) => sum + num(a.amount), 0);
+    if (inTotal <= 0) return t("validation.transferInRequired");
+    return null;
+  }
+
+  if (data.tagType === "balanceChange") {
+    // 目标余额允许为 0（表示把账户清空）
+    return null;
+  }
+
+  const total = data.accounts.reduce((sum, a) => sum + num(a.amount), 0);
+  if (total <= 0) return t("validation.amountRequired");
+  return null;
 }
 
 // 从 Modal 数据构建 CashlogEntry（统一版本，支持新建和编辑）
@@ -55,10 +83,13 @@ export function buildEntryFromModalData(
   // 余额变更类型
   if (data.tagType === "balanceChange") {
     const entries = plugin.cache.getEntries();
+    // 编辑既有条目时必须排除它自身（缓存里还是写回前的旧行），
+    // 否则旧 delta 会被重复计入，导致余额每次编辑都偏移。
     const currentBalances = AccountManager.recomputeBalances(
       entries,
       settings.accountBalances,
       settings.accounts,
+      context.location,
     );
 
     const accountAmounts: AccountAmount[] = [];

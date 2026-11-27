@@ -12,6 +12,7 @@ export interface Moment {
   subtract(amount: number, unit: string): Moment;
   date(): number;
   date(value: number): Moment;
+  daysInMonth(): number;
   isoWeekday(): number;
   valueOf(): number;
   isValid(): boolean;

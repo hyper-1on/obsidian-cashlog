@@ -90,3 +90,10 @@ export const DEFAULT_SETTINGS: CashlogSettings = {
   statsMonthStartDay: 1,
   statsWeekStartDay: 1,
 };
+
+// 返回一份全新的默认设置。
+// 直接用 DEFAULT_SETTINGS 会被调用方就地修改（例如 accounts.push），
+// 从而永久污染默认值、使「恢复默认」失效，因此这里做深拷贝。
+export function createDefaultSettings(): CashlogSettings {
+  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as CashlogSettings;
+}

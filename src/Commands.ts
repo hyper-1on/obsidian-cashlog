@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian API 和 Chart.js 类型在 ESLint 类型检查中无法完全解析 */
-import { Editor, MarkdownView, Notice } from "obsidian";
+import { Editor, Notice, type TFile } from "obsidian";
 import type CashlogPlugin from "./main";
 import { CashlogEntry } from "./CashlogEntry";
 import { parseCashlogLineLenient } from "./CashlogSerializer";
 import { CashlogModal, EditableEntryData } from "./CashlogModal";
 import { ChartModal } from "./ChartModal";
 import { nonCashlogRegex } from "./CashlogRegex";
+import { EntryLocation } from "./EntryLocation";
 import { buildEntryFromModalData } from "./EntryEditor";
 import { t } from "./i18n";
 import { moment } from "./types";
@@ -14,7 +15,7 @@ import { moment } from "./types";
 export function addCommands(plugin: CashlogPlugin): void {
   plugin.addCommand({
     id: "create-or-edit",
-    name: "Create or edit",
+    name: t("commands.createOrEdit"),
     icon: "yen-sign",
     editorCheckCallback: (checking, editor, view) => {
       return createOrEdit(checking, editor, view, plugin);
@@ -55,11 +56,23 @@ function extractLineContext(line: string): { indentation: string; listMarker: st
   };
 }
 
+// 光标所在行在文件中的位置。
+// 必须把位置一路传到 EntryEditor：编辑「余额变更」条目时，
+// 它依赖 location 才能把这条自身从「当前余额」重算里排除掉，
+// 否则每次保存都会按旧 delta 偏移一次。
+export function buildEntryLocationForCursor(
+  file: { path: string } | null | undefined,
+  lineNumber: number,
+): EntryLocation | null {
+  if (!file || !file.path) return null;
+  return new EntryLocation(file.path, lineNumber);
+}
+
 // 创建或编辑记账条目
 function createOrEdit(
   checking: boolean,
   editor: Editor,
-  _view: MarkdownView,
+  view: { file?: TFile | null } | null,
   plugin: CashlogPlugin,
 ): boolean {
   if (checking) {
@@ -71,8 +84,9 @@ function createOrEdit(
   const line = editor.getLine(lineNumber);
 
   const context = extractLineContext(line);
+  const location = buildEntryLocationForCursor(view?.file, lineNumber);
 
-  let entry = parseCashlogLineLenient(line, null, plugin.settings);
+  let entry = parseCashlogLineLenient(line, location, plugin.settings);
 
   if (entry === null) {
     const nonMatch = line.match(nonCashlogRegex);
@@ -85,7 +99,7 @@ function createOrEdit(
       [],
       context.indentation,
       context.listMarker,
-      null,
+      location,
       "",
     );
   }
@@ -100,7 +114,7 @@ function createOrEdit(
     const newEntry = buildEntryFromModalData(data, plugin, {
       indentation: context.indentation,
       listMarker: context.listMarker,
-      location: entry?.location ?? null,
+      location,
     });
     const newLine = newEntry.toFileLineString();
 

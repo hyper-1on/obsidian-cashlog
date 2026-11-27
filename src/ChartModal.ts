@@ -9,12 +9,11 @@ type ChartType = "table" | "bar" | "line" | "pie";
 
 // 所有条目类型（模块级常量，避免硬编码）
 const ALL_TYPES = ["income", "expense", "transfer", "balanceChange"] as const;
-const TYPE_LABELS: Record<string, string> = {
-  income: t("cashlogModal.type.income"),
-  expense: t("cashlogModal.type.expense"),
-  transfer: t("cashlogModal.type.transfer"),
-  balanceChange: t("cashlogModal.type.balanceChange"),
-};
+// 类型标签。惰性求值：本模块在 i18n 初始化之前就被加载，
+// 顶层调用 t() 会把中文文案固化成模块常量，导致英文界面仍显示中文。
+function typeLabel(type: string): string {
+  return t(`cashlogModal.type.${type}`);
+}
 const TYPE_QUERIES: Record<string, string> = {
   income: "is income",
   expense: "is expense",
@@ -50,7 +49,7 @@ export class ChartModal extends Modal {
   // 表格选项
   private tableColCount: number = 6;
   private tableCols: Array<{
-    field: "date" | "amount" | "description" | "link" | "account" | "attachment";
+    field: "date" | "amount" | "description" | "link" | "account" | "attachment" | "type";
     header: string;
     align: "left" | "center" | "right";
   }> = [
@@ -134,7 +133,7 @@ export class ChartModal extends Modal {
       const cb = label.createEl("input", { attr: { type: "checkbox" } });
       cb.checked = this.typeFilters.has(t);
       typeCheckboxes.push(cb);
-      label.createSpan({ text: TYPE_LABELS[t] });
+      label.createSpan({ text: typeLabel(t) });
 
       cb.addEventListener("change", () => {
         // 从全选状态点击单项：切换为仅勾选该项（e2f28c4 行为）
@@ -687,6 +686,7 @@ export class ChartModal extends Modal {
       { value: "description" as const, label: t("chartModal.field.description") },
       { value: "attachment" as const, label: t("chartModal.field.attachment") },
       { value: "link" as const, label: t("chartModal.field.link") },
+      { value: "type" as const, label: t("chartModal.field.type") },
     ];
 
     for (let i = 0; i < this.tableColCount; i++) {
@@ -721,7 +721,8 @@ export class ChartModal extends Modal {
               col.field === "amount" ? t("chartModal.field.amount") :
               col.field === "account" ? t("chartModal.field.account") :
               col.field === "attachment" ? t("chartModal.field.attachment") :
-              col.field === "description" ? t("chartModal.field.description") : t("chartModal.field.link")
+              col.field === "description" ? t("chartModal.field.description") :
+              col.field === "type" ? t("chartModal.field.type") : t("chartModal.field.link")
             )
             .setValue(col.header)
             .onChange((v) => { this.tableCols[i].header = v; }),
