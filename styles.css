@@ -2674,3 +2674,10 @@ body.theme-dark .cashlog-settings-content {
   background: transparent;
   margin-top: 0;
 }
+/* is-hidden 是项目里的通用「临时隐藏」约定，但此前只有标签树那边有限定规则；
+   导入清单的「部分」徽章和输入弹窗的错误行用了同一个类，却没有对应样式，
+   于是隐藏类加上也不生效 —— 徽章会一直显示。 */
+.cashlog-import-partial-badge.is-hidden,
+.cashlog-prompt-modal .is-hidden {
+  display: none;
+}
