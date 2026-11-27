@@ -543,5 +543,7 @@
   "import.noCategory.discard": "Discard these rows",
   "import.noCategory.back": "Go back and set them",
   "import.partial": "partial",
-  "import.partialHint": "Only some rows are ticked"
+  "import.partialHint": "Only some rows are ticked",
+  "import.selectedCount": "{count} rows selected (across {groups} groups)",
+  "import.clearSelection": "Clear all"
 }

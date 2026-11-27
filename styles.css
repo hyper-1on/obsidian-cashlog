@@ -2621,3 +2621,32 @@ body.theme-dark .cashlog-settings-content {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+/* 底部统一选中栏：跨组勾选的唯一入口，固定在列表底部 */
+.cashlog-import-selection-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  margin-top: 8px;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.cashlog-import-selection-bar .cashlog-import-batch-label {
+  flex: 1;
+}
+
+.cashlog-import-batch-clear {
+  font-size: 0.85em;
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: var(--background-modifier-hover);
+  cursor: pointer;
+}
+
+.cashlog-import-batch-clear:hover {
+  background: var(--background-modifier-border);
+}

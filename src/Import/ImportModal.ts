@@ -81,6 +81,8 @@ export class ImportModal extends Modal {
    * 重建会改变弹窗高度和滚动位置，看起来就是界面在跳。
    */
   private groupSyncers = new Map<string, () => void>();
+  /** 底部固定的「已选 N 条」栏；勾选变化时重绘它 */
+  private selectionBar: HTMLElement | null = null;
 
 
   private bodyEl!: HTMLElement;
@@ -294,6 +296,52 @@ export class ImportModal extends Modal {
     this.heightLocked = true;
   }
 
+  /**
+   * 重绘底部选中栏。
+   * 所有勾选变化（条目、组头、全选）都调它，数字才是实时的。
+   */
+  private updateSelectionBar(): void {
+    const bar = this.selectionBar;
+    if (!bar) return;
+    bar.empty();
+
+    const picked = this.drafts.filter((d) => d.selected);
+    const groupCount = this.groups.filter((g) => g.drafts.some((d) => d.selected)).length;
+
+    bar.createSpan({
+      cls: "cashlog-import-batch-label",
+      text: tp("import.selectedCount", { count: picked.length, groups: groupCount }),
+    });
+
+    if (picked.length === 0) return;
+
+    const applyBtn = bar.createSpan({ cls: "cashlog-import-batch-apply" });
+    applyBtn.setText(tp("import.batchApply", { count: picked.length }));
+    applyBtn.addEventListener("click", () => {
+      // 点击时重新过滤，保证作用于「此刻」的选中项
+      const current = this.drafts.filter((d) => d.selected);
+      if (current.length === 0) return;
+      this.openTagPicker(
+        null,
+        (tag) => {
+          if (tag === null) return;
+          applyBatch(current, { mainTag: tag });
+          this.syncAllGroups();
+          this.updateSelectionBar();
+        },
+        null,
+      );
+    });
+
+    const clearBtn = bar.createSpan({ cls: "cashlog-import-batch-clear" });
+    clearBtn.setText(t("import.clearSelection"));
+    clearBtn.addEventListener("click", () => {
+      for (const draft of this.drafts) draft.selected = false;
+      this.syncAllGroups();
+      this.updateSelectionBar();
+    });
+  }
+
   /** 逐组刷新，不重建清单。全选等跨组操作用它。 */
   private syncAllGroups(): void {
     for (const sync of this.groupSyncers.values()) sync();
@@ -345,6 +393,7 @@ export class ImportModal extends Modal {
         for (const draft of group.drafts) draft.selected = checked;
       }
       this.syncAllGroups();
+      this.updateSelectionBar();
     });
 
     const label = bar.createSpan({ cls: "cashlog-import-batch-label" });
@@ -419,44 +468,18 @@ export class ImportModal extends Modal {
       if (!this.expanded.has(group.key)) return;
 
       for (const draft of group.drafts) {
-        this.renderDraftRow(body, draft, () => {
-          syncBatch();
-          syncHead();
-        });
+        this.renderDraftRow(body, draft, onRowSelected);
       }
 
-      const batch = body.createDiv({ cls: "cashlog-import-batch" });
-      const batchLabel = batch.createSpan({ cls: "cashlog-import-batch-label" });
-      const applyBtn = batch.createSpan({ cls: "cashlog-import-batch-apply" });
-
-      syncBatch = (): void => {
-        const count = group.drafts.filter((d) => d.selected).length;
-        batchLabel.setText(`选中 ${count} 条`);
-        applyBtn.setText(tp("import.batchApply", { count }));
-        applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
-      };
-
-      applyBtn.addEventListener("click", () => {
-        // 点击时重新过滤：渲染时捕获的数组不跟着勾选变化
-        const picked = group.drafts.filter((d) => d.selected);
-        if (picked.length === 0) return;
-        this.openTagPicker(
-          null,
-          (tag) => {
-            applyBatch(picked, { mainTag: tag });
-            paintBody();
-            syncHead();
-            syncTagBtn();
-          },
-          null,
-        );
-      });
-
-      syncBatch();
+      // 组内不再单独放批量栏：勾选是跨组的统一集合，由底部固定栏处理。
+      void paintBody;
     };
 
-    // 未展开时也要有个空实现，供条目勾选回调调用
-    let syncBatch = (): void => {};
+    // 条目勾选变化时，只需同步组头与底部汇总
+    const onRowSelected = (): void => {
+      syncHead();
+      this.updateSelectionBar();
+    };
 
     toggle.addEventListener("click", () => {
       if (this.expanded.has(group.key)) this.expanded.delete(group.key);
@@ -494,6 +517,7 @@ export class ImportModal extends Modal {
     this.groupSyncers.set(group.key, () => {
       paintBody();
       syncHead();
+      syncTagBtn();
     });
   }
 
@@ -634,6 +658,11 @@ export class ImportModal extends Modal {
   }
 
   private renderFooter(): void {
+    // 跨组的统一选中集：勾选是全局状态，操作入口也只有一个，
+    // 放在列表底部并固定住，不随滚动消失。
+    this.selectionBar = this.bodyEl.createDiv({ cls: "cashlog-import-selection-bar" });
+    this.updateSelectionBar();
+
     const footer = this.bodyEl.createDiv({ cls: "cashlog-import-footer" });
 
     const untagged = countUntagged(this.drafts.filter((d) => d.selected));
