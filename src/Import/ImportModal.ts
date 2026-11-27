@@ -14,6 +14,7 @@ import { TagPickerModal, type TagPickerRoot } from "../ui/TagPicker";
 import { TagTreeModal } from "../TagTreeModal";
 import { PromptModal } from "../ui/PromptModal";
 import { ConfirmModal } from "../ui/ConfirmModal";
+import { createModalButton } from "../ModalHelpers";
 import { validateTagSegment, findNode } from "../TagTree";
 import { parseImportRows } from "./index";
 import { readStatementFile, isStatementFile } from "./ImportFileReader";
@@ -315,34 +316,40 @@ export class ImportModal extends Modal {
     });
 
     // 全选 / 全部取消：底栏是唯一的跨组入口
-    const toggleAll = bar.createSpan({ cls: "cashlog-import-selection-action" });
-    toggleAll.setText(allPicked ? t("import.clearSelection") : t("import.selectAll"));
-    toggleAll.addEventListener("click", () => {
-      const target = !allPicked;
-      for (const draft of this.drafts) draft.selected = target;
-      this.syncAllGroups();
-      this.updateSelectionBar();
-    });
+    const toggleAll = createModalButton(
+      allPicked ? t("import.clearSelection") : t("import.selectAll"),
+      "secondary",
+      () => {
+        const target = !allPicked;
+        for (const draft of this.drafts) draft.selected = target;
+        this.syncAllGroups();
+        this.updateSelectionBar();
+      },
+    );
+    bar.appendChild(toggleAll);
 
     if (picked.length === 0) return;
 
-    const applyBtn = bar.createSpan({ cls: "cashlog-import-selection-action" });
-    applyBtn.setText(tp("import.batchApply", { count: picked.length }));
-    applyBtn.addEventListener("click", () => {
-      // 点击时重新过滤，保证作用于「此刻」的选中项
-      const current = this.drafts.filter((d) => d.selected);
-      if (current.length === 0) return;
-      this.openTagPicker(
-        null,
-        (tag) => {
-          if (tag === null) return;
-          applyBatch(current, { mainTag: tag });
-          this.syncAllGroups();
-          this.updateSelectionBar();
-        },
-        null,
-      );
-    });
+    const applyBtn = createModalButton(
+      tp("import.batchApply", { count: picked.length }),
+      "primary",
+      () => {
+        // 点击时重新过滤，保证作用于「此刻」的选中项
+        const current = this.drafts.filter((d) => d.selected);
+        if (current.length === 0) return;
+        this.openTagPicker(
+          null,
+          (tag) => {
+            if (tag === null) return;
+            applyBatch(current, { mainTag: tag });
+            this.syncAllGroups();
+            this.updateSelectionBar();
+          },
+          null,
+        );
+      },
+    );
+    bar.appendChild(applyBtn);
   }
 
   /** 逐组刷新，不重建清单。全选等跨组操作用它。 */

@@ -2465,8 +2465,8 @@ body.theme-dark .cashlog-settings-content {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--background-modifier-border);
+  /* 与上面的选中栏属于同一块底栏，不再画第二条分割线 */
+  padding: 4px 4px 10px;
 }
 
 .cashlog-import-warn {
@@ -2629,11 +2629,11 @@ body.theme-dark .cashlog-settings-content {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  padding: 0 12px;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 4px;
   margin-top: 8px;
-  font-size: 0.85em;
+  font-size: 13px;
   background: var(--background-secondary);
   border-top: 1px solid var(--background-modifier-border);
   /* 阴影把底栏和列表分成两层，不再和普通分割线看起来一样 */
@@ -2642,7 +2642,7 @@ body.theme-dark .cashlog-settings-content {
 
 .cashlog-import-selection-count {
   flex: 1;
-  font-size: 0.85em;
+  font-size: 13px;
   line-height: 1.2;
   color: var(--text-normal);
   white-space: nowrap;
@@ -2650,21 +2650,6 @@ body.theme-dark .cashlog-settings-content {
   text-overflow: ellipsis;
 }
 
-.cashlog-import-selection-action {
-  flex-shrink: 0;
-  font-size: 0.85em;
-  line-height: 1.2;
-  padding: 3px 10px;
-  border-radius: 10px;
-  background: var(--background-modifier-hover);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.cashlog-import-selection-action:hover {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-}
 /* 吸底容器：选中栏 + 操作按钮一起固定在弹窗底部 */
 .cashlog-import-bottom {
   position: sticky;
