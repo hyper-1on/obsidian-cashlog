@@ -541,5 +541,7 @@
   "import.noCategory.title": "Some rows have no category",
   "import.noCategory.body": "{count} rows have no category (expense / income) and cannot be written.",
   "import.noCategory.discard": "Discard these rows",
-  "import.noCategory.back": "Go back and set them"
+  "import.noCategory.back": "Go back and set them",
+  "import.partial": "partial",
+  "import.partialHint": "Only some rows are ticked"
 }

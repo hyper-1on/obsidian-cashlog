@@ -75,6 +75,12 @@ export class ImportModal extends Modal {
   private sort: GroupSort = "bill";
   /** 是否已经按内容高度锁过一次弹窗高度 */
   private heightLocked = false;
+  /**
+   * 每个分组的局部刷新入口（组头勾选状态 + 组内 body）。
+   * 全选这类跨组操作只调它们，不重建整张清单 ——
+   * 重建会改变弹窗高度和滚动位置，看起来就是界面在跳。
+   */
+  private groupSyncers = new Map<string, () => void>();
 
 
   private bodyEl!: HTMLElement;
@@ -288,6 +294,11 @@ export class ImportModal extends Modal {
     this.heightLocked = true;
   }
 
+  /** 逐组刷新，不重建清单。全选等跨组操作用它。 */
+  private syncAllGroups(): void {
+    for (const sync of this.groupSyncers.values()) sync();
+  }
+
   /** 组是否「全选」：组内所有条目都勾着。直接从草稿推导，不另存状态。 */
   private isGroupSelected(group: ImportGroup): boolean {
     return group.drafts.length > 0 && group.drafts.every((draft) => draft.selected);
@@ -327,12 +338,13 @@ export class ImportModal extends Modal {
     all.checked = this.groups.length > 0 && count === this.groups.length;
     all.indeterminate = count > 0 && count < this.groups.length;
     all.addEventListener("change", () => {
-      // 全选/全不选直接作用到条目上，组的状态由条目推导
+      // 全选/全不选直接作用到条目上，组的状态由条目推导；
+      // 只刷新各组，不重建清单
       const checked = all.checked;
       for (const group of this.groups) {
         for (const draft of group.drafts) draft.selected = checked;
       }
-      this.refresh();
+      this.syncAllGroups();
     });
 
     const label = bar.createSpan({ cls: "cashlog-import-batch-label" });
@@ -367,6 +379,12 @@ export class ImportModal extends Modal {
 
     const total = group.drafts.reduce((sum, d) => sum + d.record.amount, 0);
     head.createSpan({ cls: "cashlog-import-group-name", text: group.key });
+    // 原生 indeterminate 会画横线，但主题对 checkbox 做了自定义外观时经常不生效，
+    // 所以额外给一个文字标记，保证「部分选中」这个状态一定看得见。
+    const partialBadge = head.createSpan({
+      cls: "cashlog-import-partial-badge",
+      text: t("import.partial"),
+    });
     head.createSpan({
       cls: "cashlog-import-group-count",
       text: `${group.drafts.length} 条 · ${total.toFixed(2)}`,
@@ -375,8 +393,11 @@ export class ImportModal extends Modal {
     const tagBtn = head.createSpan({ cls: "cashlog-import-tag-btn" });
 
     const syncHead = (): void => {
+      const partial = this.isGroupPartial(group);
       groupCheck.checked = this.isGroupSelected(group);
-      groupCheck.indeterminate = this.isGroupPartial(group);
+      groupCheck.indeterminate = partial;
+      groupCheck.setAttribute("title", partial ? t("import.partialHint") : "");
+      partialBadge.toggleClass("is-hidden", !partial);
       toggle.setText(this.expanded.has(group.key) ? "▾" : "▸");
     };
 
@@ -468,6 +489,12 @@ export class ImportModal extends Modal {
     syncHead();
     syncTagBtn();
     paintBody();
+
+    // 全选时由外部调用，避免重建整棵树
+    this.groupSyncers.set(group.key, () => {
+      paintBody();
+      syncHead();
+    });
   }
 
   private renderDraftRow(

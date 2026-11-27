@@ -2612,3 +2612,12 @@ body.theme-dark .cashlog-settings-content {
   border-left: 2px solid var(--text-warning, #d19a00);
   padding-left: 22px;
 }
+/* 「部分选中」标记：不依赖原生 indeterminate 的外观 */
+.cashlog-import-partial-badge {
+  font-size: 0.72em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}

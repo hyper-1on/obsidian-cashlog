@@ -541,5 +541,7 @@
   "import.noCategory.title": "有条目缺少大类",
   "import.noCategory.body": "{count} 条没有设置大类（支出 / 收入），无法写入笔记。",
   "import.noCategory.discard": "舍弃这些条目",
-  "import.noCategory.back": "返回补设"
+  "import.noCategory.back": "返回补设",
+  "import.partial": "部分",
+  "import.partialHint": "只选中了部分条目"
 }
