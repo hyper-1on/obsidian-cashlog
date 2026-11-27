@@ -3,7 +3,10 @@
 > **Fork notice** — This is a fork of
 > [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog),
 > maintained at [hyper-1on/obsidian-cashlog](https://github.com/hyper-1on/obsidian-cashlog).
-> See **[PATCH.md](PATCH.md)** for the complete list of defects fixed relative to upstream.
+> Current version **1.2.0**, kept for personal use: it publishes no releases and
+> is not submitted to the community store. See **[PATCH.md](PATCH.md)** for the
+> defects fixed relative to upstream, and **[CHANGES.md](CHANGES.md)** for the
+> development log.
 
 A personal finance tracking plugin for [Obsidian](https://obsidian.md). Record income and expenses directly in your Markdown notes with an emoji-based syntax, then query, visualize, and analyze your data — all within your vault.
 
@@ -36,6 +39,12 @@ On top of the features above, this fork carries changes that upstream does not
 have. The fixed-defect list is in [PATCH.md](PATCH.md); the running development
 log is in [CHANGES.md](CHANGES.md).
 
+- **Statement import** — pick an Alipay ledger or WeChat personal statement
+  (CSV / XLSX) from the vault and review the parsed rows as a confirmation
+  list: duplicates are marked, transfers are paired, missing directions and
+  tags are filled in, then everything is written in one go. Declared counts
+  and amounts are reconciled against the file's summary; text encoding falls
+  back from UTF-8 to GB18030
 - **Tag tree** — tags form a tree of any depth (`expense/food/lunch`), managed
   from a single dialog: rename in place, add a sub-tag, delete with a two-click
   confirm
@@ -53,7 +62,7 @@ log is in [CHANGES.md](CHANGES.md).
   index, plus new `tag` and `time` columns
 - **Currency symbol override** — keep the UI language while recording in a
   different currency
-- **Regression suite in the repo** — `npm test` runs 140 cases with no extra
+- **Regression suite in the repo** — `npm test` runs 182 cases with no extra
   dependencies
 
 ## Quick Start
@@ -252,20 +261,39 @@ Use `` ```cashlog-chart `` code blocks to render visualizations powered by Chart
 
 ## Installation
 
-### Manual
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/hyper-1on/obsidian-cashlog/releases)
-2. Copy them to `.obsidian/plugins/obsidian-cashlog/` in your vault
-3. Enable the plugin in Obsidian Settings → Community Plugins
+This fork publishes **no releases** and is not in the community store, so there
+is no package to download. Build it from source and copy the output into your
+vault.
 
 ### Build from source
 
 ```bash
 git clone https://github.com/hyper-1on/obsidian-cashlog.git
 cd obsidian-cashlog
+git checkout dev
 npm install
 npm run build
 ```
+
+One dependency resolves from `git+ssh` (`eslint-plugin`, pulled in by
+`obsidian-dev-utils`). If `npm install` fails on an SSH error, rewrite the SSH
+remote to HTTPS first, then retry:
+
+```bash
+git config --global url."https://github.com/".insteadOf "git@github.com:"
+```
+
+### Copy into the vault
+
+1. Create a folder under `.obsidian/plugins/` in your vault; its name must match
+   the `id` in `manifest.json`
+2. Copy `main.js`, `manifest.json` and `styles.css` into it
+3. Enable the plugin in Obsidian Settings → Community Plugins
+
+### Update
+
+Rebuild, overwrite `main.js` and `styles.css`, then reload the plugin in
+Obsidian.
 
 ## Settings
 

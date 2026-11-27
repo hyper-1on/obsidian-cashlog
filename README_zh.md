@@ -2,8 +2,10 @@
 
 > **Fork 声明** — 本仓库是
 > [uuq007/obsidian-cashlog](https://github.com/uuq007/obsidian-cashlog) 的 fork，
-> 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护。
-> 相对上游的全部缺陷修复见 **[PATCH.md](PATCH.md)**。
+> 由 [hyper-1on](https://github.com/hyper-1on/obsidian-cashlog) 维护，当前版本
+> **1.2.0**，只作自用，不发布 release、不提交社区市场。
+> 相对上游的全部缺陷修复见 **[PATCH.md](PATCH.md)**，后续开发记录见
+> **[CHANGES.md](CHANGES.md)**。
 
 一款 Obsidian 个人记账插件。使用 Emoji 标记直接在 Markdown 笔记中记录收支，然后通过查询语法检索、可视化和分析数据 — 所有操作都在你的 Vault 中完成。
 
@@ -31,6 +33,9 @@
 在上述功能之外，本仓库还包含上游没有的改动。缺陷修复清单见
 [PATCH.md](PATCH.md)，逐条开发记录见 [CHANGES.md](CHANGES.md)。
 
+- **账单导入** — 从 vault 里选支付宝流水或微信个人账单（CSV / XLSX），
+  解析成待确认列表：标出重复项与转账配对，补齐方向与标签后一次写入。
+  支持表头笔数与金额对账，编码按 UTF-8 → GB18030 回退
 - **标签树** — 标签是任意深度的树（`支出/餐饮/午餐`），在同一个弹窗里管理：
   就地改名、加子标签、连点两次删除
 - **级联选标签** — 记账时逐层选择，三层标签点三次，不用打字
@@ -42,7 +47,7 @@
 - **编辑器右键菜单与左侧栏图标** — 不用命令面板也能记账或插入图表
 - **顺序式 `column` 指令** — 按顺序声明列而不是按下标，并新增 `tag`、`time` 两列
 - **货币符号可覆盖** — 界面语言与记账货币可以不一致
-- **仓库内置回归测试** — `npm test` 跑 140 条，无额外依赖
+- **仓库内置回归测试** — `npm test` 跑 182 条，无额外依赖
 
 ## 快速开始
 
@@ -240,20 +245,38 @@ date 2026-01-01 2026-03-31   # 绝对范围
 
 ## 安装
 
-### 手动安装
-
-1. 从 [最新发布](https://github.com/hyper-1on/obsidian-cashlog/releases) 下载 `main.js`、`manifest.json` 和 `styles.css`
-2. 复制到你的 Vault 的 `.obsidian/plugins/obsidian-cashlog/` 目录
-3. 在 Obsidian 设置 → 第三方插件中启用
+本 fork **不发布 release**，也不在 Obsidian 社区市场里，没有可以直接下载的
+安装包。用法是从源码构建，再把产物放进 vault。
 
 ### 从源码构建
 
 ```bash
 git clone https://github.com/hyper-1on/obsidian-cashlog.git
 cd obsidian-cashlog
+git checkout dev
 npm install
 npm run build
 ```
+
+依赖里有一个 `git+ssh` 来源的包（`eslint-plugin`，由 `obsidian-dev-utils`
+带入）。如果 `npm install` 报 SSH 相关错误，先让 git 把 SSH 地址重写成
+HTTPS，再重试：
+
+```bash
+git config --global url."https://github.com/".insteadOf "git@github.com:"
+```
+
+### 放进 vault
+
+1. 在 vault 的 `.obsidian/plugins/` 下建一个目录，目录名与 `manifest.json`
+   的 `id` 保持一致
+2. 把 `main.js`、`manifest.json`、`styles.css` 复制进去
+3. Obsidian 设置 → 第三方插件 → 重新加载列表 → 启用
+
+### 更新
+
+重新 `npm run build`，覆盖 `main.js` 与 `styles.css`，再在 Obsidian 里
+重载插件（或执行「重新加载应用」）。
 
 ## 设置
 
