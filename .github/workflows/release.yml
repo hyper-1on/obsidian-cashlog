@@ -1,9 +1,13 @@
 name: Release Obsidian plugin
 
+# 自动发布暂时停用，改为手动触发。
+# 原因：package-lock.json 里有一条 git+ssh 传递依赖
+# （eslint-plugin，由 obsidian-dev-utils 带入），GitHub Actions 上没有对应
+# 的 SSH 凭据，会在 npm install 这一步失败，推送 tag 只会留下失败记录。
+# 恢复自动发布的先决条件：让 npm install 不再需要 SSH（换成 https 来源，
+# 或移除产生该依赖的 devDependency）。
 on:
-  push:
-    tags:
-      - "*"
+  workflow_dispatch:
 
 jobs:
   build:
