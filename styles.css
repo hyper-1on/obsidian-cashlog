@@ -2681,3 +2681,15 @@ body.theme-dark .cashlog-settings-content {
 .cashlog-prompt-modal .is-hidden {
   display: none;
 }
+/* 组级勾选框的半选状态。
+   Obsidian/主题常把 input[type=checkbox] 的 appearance 改掉，
+   浏览器的默认横线就不再绘制，所以用背景图画一条：
+   命中 :indeterminate 时铺一条居中、宽 60% 的横线。 */
+input[type="checkbox"].cashlog-import-group-check:indeterminate {
+  background-color: var(--interactive-accent);
+  background-image: linear-gradient(var(--text-on-accent), var(--text-on-accent));
+  background-size: 62% 2px;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-color: var(--interactive-accent);
+}

@@ -407,12 +407,7 @@ export class ImportModal extends Modal {
 
     const total = group.drafts.reduce((sum, d) => sum + d.record.amount, 0);
     head.createSpan({ cls: "cashlog-import-group-name", text: group.key });
-    // 原生 indeterminate 会画横线，但主题对 checkbox 做了自定义外观时经常不生效，
-    // 所以额外给一个文字标记，保证「部分选中」这个状态一定看得见。
-    const partialBadge = head.createSpan({
-      cls: "cashlog-import-partial-badge",
-      text: t("import.partial"),
-    });
+
     head.createSpan({
       cls: "cashlog-import-group-count",
       text: `${group.drafts.length} 条 · ${total.toFixed(2)}`,
@@ -423,9 +418,9 @@ export class ImportModal extends Modal {
     const syncHead = (): void => {
       const partial = this.isGroupPartial(group);
       groupCheck.checked = this.isGroupSelected(group);
+      // 半选状态交给原生 indeterminate，命中时由样式画一条横线
       groupCheck.indeterminate = partial;
       groupCheck.setAttribute("title", partial ? t("import.partialHint") : "");
-      partialBadge.toggleClass("is-hidden", !partial);
       toggle.setText(this.expanded.has(group.key) ? "▾" : "▸");
     };
 
