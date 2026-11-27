@@ -245,8 +245,10 @@ export class ImportModal extends Modal {
       });
     }
 
-    // 目标笔记
-    new Setting(this.bodyEl)
+    // 目标笔记。放进 section 里：Setting 直接挂在 bodyEl 上时没有 section 的内边距，
+    // 会比下面的排序、流水区块更靠左。
+    const targetBody = createSection(this.bodyEl, {});
+    new Setting(targetBody)
       .setName(t("import.targetNote"))
       .setDesc(t("import.targetNoteDesc"))
       .addText((text) =>
