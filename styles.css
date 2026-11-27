@@ -2655,10 +2655,16 @@ body.theme-dark .cashlog-settings-content {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 2px;
   background: var(--background-secondary);
+  /* 比列表深一档的底色在部分主题下几乎看不出，
+     所以再叠一层内阴影和一圈外投影，保证底栏是独立的一层。 */
   border-top: 1px solid var(--background-modifier-border);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 10px 10px 0 0;
+  box-shadow:
+    inset 0 1px 0 var(--background-modifier-border),
+    0 -6px 18px rgba(0, 0, 0, 0.14);
 }
 
 /* 容器已经负责吸底与分割，栏本身不再重复画 */
