@@ -2577,29 +2577,22 @@ body.theme-dark .cashlog-settings-content {
   line-height: 1.6;
   color: var(--text-normal);
 }
-/* 导入弹窗与标签选择器同样需要「顶部起算」：
-   Modal 默认垂直居中，展开一个分组、或级联选择器多出一级时整体会上下跳。
-   固定顶部后，高度变化只影响下边缘。 */
+/* 弹窗保持垂直居中，但把高度固定住。
+   Modal 默认高度随内容变化，内容一变高居中的基准就变，看起来就是整个弹窗在漂；
+   固定高度后，内容只在内部滚动，外框位置不动。 */
 .modal:has(.cashlog-import-modal) {
-  align-self: flex-start;
-  margin-top: 8vh;
-  max-height: 84vh;
+  height: 80vh;
+  max-height: 80vh;
 }
 
 .modal:has(.cashlog-tag-picker-modal) {
-  align-self: flex-start;
-  margin-top: 8vh;
-  max-height: 84vh;
-}
-
-.modal:has(.cashlog-confirm-modal),
-.modal:has(.cashlog-prompt-modal) {
-  align-self: center;
+  height: 60vh;
+  max-height: 60vh;
 }
 
 /* 导入清单自身滚动，避免整页跟着内容长度走 */
 .cashlog-import-modal {
-  max-height: 76vh;
+  height: 100%;
   overflow-y: auto;
 }
 

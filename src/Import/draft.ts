@@ -86,7 +86,9 @@ export function toDraft(record: ImportRecord): ImportDraft {
     transferToAccount: null,
     status: record.direction === "undetermined" ? "needs-direction" : "new",
     duplicateCount: 0,
-    selected: record.direction !== "undetermined",
+    // 一律默认勾选：按方向决定会出现「这组全勾、那组全不勾」的观感，
+    // 用户无从判断是不是自己点过。方向未定的条目导入时会被拦下并说明。
+    selected: true,
   };
 }
 

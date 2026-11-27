@@ -73,8 +73,7 @@ export class ImportModal extends Modal {
   private expanded = new Set<string>();
   /** 分组排序方式 */
   private sort: GroupSort = "bill";
-  /** 组级勾选：批量设置大类时用 */
-  private selectedGroups = new Set<string>();
+
 
   private bodyEl!: HTMLElement;
 
@@ -264,6 +263,16 @@ export class ImportModal extends Modal {
     this.renderFooter();
   }
 
+  /** 组是否「全选」：组内所有条目都勾着。直接从草稿推导，不另存状态。 */
+  private isGroupSelected(group: ImportGroup): boolean {
+    return group.drafts.length > 0 && group.drafts.every((draft) => draft.selected);
+  }
+
+  /** 组是否是「部分选中」，用来显示半选框。 */
+  private isGroupPartial(group: ImportGroup): boolean {
+    return group.drafts.some((draft) => draft.selected) && !this.isGroupSelected(group);
+  }
+
   /** 排序下拉 + 组级批量操作 */
   private renderGroupToolbar(): void {
     const toolbar = createSection(this.bodyEl, {});
@@ -289,25 +298,26 @@ export class ImportModal extends Modal {
     const bar = toolbar.createDiv({ cls: "cashlog-import-batch cashlog-import-group-batch" });
 
     const all = bar.createEl("input", { attr: { type: "checkbox" } });
-    all.checked = this.groups.length > 0 && this.selectedGroups.size === this.groups.length;
+    const count = this.groups.filter((group) => this.isGroupSelected(group)).length;
+    all.checked = this.groups.length > 0 && count === this.groups.length;
+    all.indeterminate = count > 0 && count < this.groups.length;
     all.addEventListener("change", () => {
-      if (all.checked) {
-        for (const group of this.groups) this.selectedGroups.add(group.key);
-      } else {
-        this.selectedGroups.clear();
+      // 全选/全不选直接作用到条目上，组的状态由条目推导
+      const checked = all.checked;
+      for (const group of this.groups) {
+        for (const draft of group.drafts) draft.selected = checked;
       }
       this.refresh();
     });
 
     const label = bar.createSpan({ cls: "cashlog-import-batch-label" });
-    const count = this.selectedGroups.size;
     label.setText(`已选 ${count} 组 / 共 ${this.groups.length} 组`);
 
     const applyBtn = bar.createSpan({ cls: "cashlog-import-batch-apply" });
     applyBtn.setText(tp("import.batchGroupTag", { count }));
     applyBtn.toggleClass("cashlog-import-batch-disabled", count === 0);
     applyBtn.addEventListener("click", () => {
-      const picked = this.groups.filter((g) => this.selectedGroups.has(g.key));
+      const picked = this.groups.filter((g) => this.isGroupSelected(g));
       if (picked.length === 0) return;
       // 与子条目批量同一套选择器：可以只到大类，也可以选到细分
       this.openTagPicker(null, (tag) => {
@@ -328,10 +338,13 @@ export class ImportModal extends Modal {
 
     const groupCheck = head.createEl("input", { attr: { type: "checkbox" } });
     groupCheck.className = "cashlog-import-group-check";
-    groupCheck.checked = this.selectedGroups.has(group.key);
+    groupCheck.checked = this.isGroupSelected(group);
+    // 部分选中显示半选框，避免看起来像「全选」或「全不选」
+    groupCheck.indeterminate = this.isGroupPartial(group);
     groupCheck.addEventListener("change", () => {
-      if (groupCheck.checked) this.selectedGroups.add(group.key);
-      else this.selectedGroups.delete(group.key);
+      // 勾母类即勾选该组全部条目
+      const checked = groupCheck.checked;
+      for (const draft of group.drafts) draft.selected = checked;
       this.refresh();
     });
 
@@ -569,8 +582,12 @@ export class ImportModal extends Modal {
   }
 
   private refresh(): void {
+    // 重建会把容器的 scrollTop 归零；保存并还原，
+    // 否则展开/勾选后视口会跳回顶部，表现为「内容上下漂移」。
+    const scroll = this.bodyEl.scrollTop;
     this.groups = groupDrafts(this.drafts, this.options.groupKeyFn);
     this.renderList(this.result?.source ?? undefined);
+    this.bodyEl.scrollTop = scroll;
   }
 
   // ---------------------------------------------------------------- 标签选择

@@ -2837,7 +2837,7 @@ test("[导入] 草稿：描述可读、中性交易进入待定状态", () => {
   const pending = drafts.filter((d) => d.status === "needs-direction");
   assert.equal(pending.length, 1, "中性交易应进入待定");
   assert.equal(pending[0].entryType, null, "待定时不能预设条目类型");
-  assert.equal(pending[0].selected, false, "待定的默认不勾选");
+  assert.equal(pending[0].selected, true, "默认统一勾选；方向未定的导入时会被拦下并说明");
 });
 
 test("[导入] 去重：同一订单号在本次文件里只保留第一条", () => {
